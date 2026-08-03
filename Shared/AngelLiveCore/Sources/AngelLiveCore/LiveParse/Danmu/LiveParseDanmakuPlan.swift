@@ -183,12 +183,46 @@ struct LiveParseDanmakuDriverResult: Decodable, Sendable {
     let writes: [LiveParseDanmakuWriteAction]?
     let timer: LiveParseDanmakuTimerPlan?
     let poll: LiveParseDanmakuPollRequest?
+
+    private enum CodingKeys: String, CodingKey {
+        case ok, messages, writes, timer, poll
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        ok = try container.decodeIfPresent(Bool.self, forKey: .ok)
+        writes = try container.decodeIfPresent([LiveParseDanmakuWriteAction].self, forKey: .writes)
+        timer = try container.decodeIfPresent(LiveParseDanmakuTimerPlan.self, forKey: .timer)
+        poll = try container.decodeIfPresent(LiveParseDanmakuPollRequest.self, forKey: .poll)
+        // 逐条解码：单条消息格式异常时只丢这一条，其余消息照常送达。
+        // 整数组一起解码会让一条坏消息带走整帧。
+        messages = try container
+            .decodeIfPresent([FailableDecodable<LiveParseDanmakuMessage>].self, forKey: .messages)?
+            .compactMap(\.value)
+    }
+}
+
+/// 逐元素容错解码包装：解码失败时 `value` 为 nil，不向外抛错。
+struct FailableDecodable<Wrapped: Decodable & Sendable>: Decodable, Sendable {
+    let value: Wrapped?
+
+    init(from decoder: any Decoder) throws {
+        value = try? Wrapped(from: decoder)
+    }
 }
 
 struct LiveParseDanmakuMessage: Decodable, Sendable {
     let text: String
     let nickname: String
     let color: UInt32?
+    /// 可选块，存在即代表这是一条图片弹幕。是否为图片弹幕完全由插件判定。
+    let image: LiveParseDanmakuImage?
+}
+
+struct LiveParseDanmakuImage: Decodable, Sendable {
+    let url: String
+    let width: Double?
+    let height: Double?
 }
 
 struct LiveParseDanmakuWriteAction: Decodable, Sendable {

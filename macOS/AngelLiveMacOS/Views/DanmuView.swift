@@ -64,6 +64,35 @@ struct DanmuView: NSViewRepresentable {
             self.view = view
         }
 
+        /// 发射弹幕。带图片的消息先取图再发射,取图失败或超时降级为文本弹幕。
+        @MainActor
+        func shoot(_ message: DanmakuDisplayMessage, showColorDanmu: Bool, alpha: CGFloat, font: CGFloat) {
+            guard let image = message.image else {
+                shoot(text: message.text, showColorDanmu: showColorDanmu, color: message.color, alpha: alpha, font: font)
+                return
+            }
+
+            Task { @MainActor [weak self] in
+                guard let cgImage = await DanmakuImageLoader.shared.image(for: image.url) else {
+                    self?.shoot(text: message.text, showColorDanmu: showColorDanmu, color: message.color, alpha: alpha, font: font)
+                    return
+                }
+                self?.shootImage(cgImage, pixelSize: image.pixelSize, font: font)
+            }
+        }
+
+        @MainActor
+        private func shootImage(_ image: CGImage, pixelSize: CGSize?, font: CGFloat) {
+            let model = DanmakuImageCellModel(
+                image: image,
+                pixelSize: pixelSize,
+                font: NSFont.systemFont(ofSize: font)
+            )
+            // §6.2 错落感:与文本弹幕一致的 displayTime 微抖动
+            model.displayTime = model.displayTime * Double.random(in: 0.85...1.15)
+            view?.shoot(danmaku: model)
+        }
+
         func shoot(text: String, showColorDanmu: Bool, color: UInt32, alpha: CGFloat, font: CGFloat) {
             let model = DanmakuTextCellModel(str: text, strFont: NSFont.systemFont(ofSize: font))
             // §6.2 错落感:displayTime ±15% 微抖动,同 tick 发出的弹幕速度自然拉开

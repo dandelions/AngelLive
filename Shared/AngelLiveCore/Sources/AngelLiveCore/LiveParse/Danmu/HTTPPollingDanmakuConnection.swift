@@ -179,11 +179,7 @@ private extension HTTPPollingDanmakuConnection {
     func deliverMessages(_ messages: [LiveParseDanmakuMessage]?) {
         guard let messages else { return }
         for message in messages {
-            delegate?.webSocketDidReceiveMessage(
-                text: message.text,
-                nickname: message.nickname,
-                color: message.color ?? 0xFFFFFF
-            )
+            delegate?.webSocketDidReceiveMessage(DanmakuDisplayMessage(message))
         }
     }
 
