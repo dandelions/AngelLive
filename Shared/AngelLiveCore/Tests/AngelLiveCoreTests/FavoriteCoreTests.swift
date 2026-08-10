@@ -70,6 +70,38 @@ struct FavoriteIdentityRulesTests {
   }
 }
 
+@Suite("Favorite cloud state")
+struct FavoriteCloudStateTests {
+  @Test("a recovered account check clears the stale cloud error")
+  @MainActor
+  func recoveredAccountClearsStaleError() {
+    let model = AppFavoriteModel()
+    model.applyCloudState(isReady: false, message: "iCloud account is temporarily not available")
+
+    let recoveredAt = Date(timeIntervalSince1970: 1_786_291_200)
+    model.applyCloudState(isReady: true, message: "正常", now: recoveredAt)
+
+    #expect(model.cloudKitReady)
+    #expect(!model.cloudReturnError)
+    #expect(model.cloudKitStateString == "正常")
+    #expect(model.syncStatus == .success)
+    #expect(model.lastSyncTime == recoveredAt)
+  }
+
+  @Test("cloud errors only block the page when no local favorites exist")
+  @MainActor
+  func cloudErrorDoesNotHideLocalFavorites() {
+    let model = AppFavoriteModel()
+    model.applyCloudState(isReady: false, message: "iCloud account is temporarily not available")
+
+    #expect(model.shouldShowBlockingCloudError)
+
+    model.roomList = [room(liveType: "3", userId: "user-1", roomId: "room-1")]
+
+    #expect(!model.shouldShowBlockingCloudError)
+  }
+}
+
 @Suite("Favorite backup service")
 struct FavoriteBackupServiceTests {
   @Test("AngelLive export decodes full LiveModel payload without item failures")

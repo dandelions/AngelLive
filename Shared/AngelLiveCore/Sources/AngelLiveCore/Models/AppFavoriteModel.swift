@@ -56,6 +56,9 @@ public final class AppFavoriteModel {
     /// 非阻塞提示,与是否有本地缓存无关——本地收藏照常可交互。
     public var isCloudSyncing: Bool { syncStatus == .syncing }
 
+    /// 云同步不可用时仅在本地也没有收藏可展示的情况下使用整页错误态。
+    public var shouldShowBlockingCloudError: Bool { cloudReturnError && roomList.isEmpty }
+
     private var isSyncing: Bool = false  // 添加同步状态标记
 
     private enum Keys {
@@ -137,6 +140,22 @@ public final class AppFavoriteModel {
     private func wireRemoteChange() {
         FavoriteSyncEngine.shared.onRemoteChange = { @MainActor [weak self] in
             await self?.reloadFromLocalAfterRemoteChange()
+        }
+    }
+
+    /// 以同步结束时的最新账号状态收口 UI，避免启动时的瞬时失败覆盖后续恢复结果。
+    @MainActor
+    func applyCloudState(isReady: Bool, message: String, now: Date = Date()) {
+        cloudKitReady = isReady
+        cloudKitStateString = message
+        cloudReturnError = !isReady
+
+        if isReady {
+            syncStatus = .success
+            lastSyncTime = now
+            lastSyncError = nil
+        } else {
+            syncStatus = .notLoggedIn
         }
     }
 
@@ -241,20 +260,8 @@ public final class AppFavoriteModel {
         await refreshStatesAndApply(members: current)
         syncProgressInfo = ("", "", "", 0, 0)
         isLoading = false
-        if cloudKitReady {
-            syncStatus = .success
-            lastSyncTime = Date()
-            lastSyncError = nil
-        } else {
-            let stateStr = await FavoriteService.getCloudState()
-            if stateStr == "无法确定状态" {
-                self.cloudKitStateString = "iCloud状态可能存在假登录，当前状态：" + stateStr + "请尝试重新在设置中登录iCloud"
-            } else {
-                self.cloudKitStateString = stateStr
-            }
-            cloudReturnError = true
-            syncStatus = .notLoggedIn
-        }
+        let finalState = await actor.getState()
+        applyCloudState(isReady: finalState.0, message: finalState.1)
     }
 
     /// 下拉刷新专用方法 - 不清空数据，保持 List 结构稳定
@@ -297,20 +304,8 @@ public final class AppFavoriteModel {
 
         let current = await FavoriteLocalStore.shared.load()
         await refreshStatesAndApply(members: current)
-        if cloudKitReady {
-            syncStatus = .success
-            lastSyncTime = Date()
-            lastSyncError = nil
-        } else {
-            let stateStr = await FavoriteService.getCloudState()
-            if stateStr == "无法确定状态" {
-                self.cloudKitStateString = "iCloud状态可能存在假登录，当前状态：" + stateStr + "请尝试重新在设置中登录iCloud"
-            } else {
-                self.cloudKitStateString = stateStr
-            }
-            cloudReturnError = true
-            syncStatus = .notLoggedIn
-        }
+        let finalState = await actor.getState()
+        applyCloudState(isReady: finalState.0, message: finalState.1)
     }
 
     @MainActor
