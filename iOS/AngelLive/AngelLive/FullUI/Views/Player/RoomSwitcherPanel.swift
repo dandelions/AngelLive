@@ -15,6 +15,7 @@ struct RoomSwitcherPanel: View {
     let isLoadingMoreCategory: Bool
     let onLoadMoreCategory: (() async -> [LiveModel])?
     let onSelect: (LiveModel) -> Void
+    let onClose: () -> Void
     @Environment(AppFavoriteModel.self) private var favoriteModel
 
     private var availableSources: [RoomSwitchSource] {
@@ -101,6 +102,17 @@ struct RoomSwitcherPanel: View {
                     .controlSize(.small)
                     .accessibilityLabel("正在切换直播间")
             }
+
+            Button(action: onClose) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 34, height: 34)
+                    .background(.white.opacity(0.12), in: Circle())
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("关闭快速换台")
         }
         .padding(.horizontal, 20)
         .padding(.top, 20)
@@ -211,6 +223,7 @@ private final class JXRoomSourcePagerViewController: UIViewController {
     private var onSelect: (Int) -> Void = { _ in }
     private var onSelectRoom: (LiveModel) -> Void = { _ in }
     private var isApplyingSwiftUIUpdate = false
+    private var lastLayoutWidth: CGFloat = 0
 
     private lazy var segmentedView: JXSegmentedView = {
         let view = JXSegmentedView()
@@ -259,6 +272,18 @@ private final class JXRoomSourcePagerViewController: UIViewController {
         ])
 
         reloadSources()
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+
+        let layoutWidth = view.bounds.width
+        guard layoutWidth > 0, abs(layoutWidth - lastLayoutWidth) > 1 else { return }
+        lastLayoutWidth = layoutWidth
+
+        listContainerView.setNeedsLayout()
+        listContainerView.layoutIfNeeded()
+        updateVisiblePageWidths(layoutWidth)
     }
 
     func configure(
@@ -313,6 +338,12 @@ private final class JXRoomSourcePagerViewController: UIViewController {
         }
     }
 
+    private func updateVisiblePageWidths(_ width: CGFloat) {
+        for list in listContainerView.validListDict.values {
+            (list as? RoomListViewController)?.updatePreferredStaticLayoutWidth(width)
+        }
+    }
+
     private func selectConfiguredSource() {
         guard pages.indices.contains(configuredSelectedIndex),
               segmentedView.selectedIndex != configuredSelectedIndex else { return }
@@ -346,6 +377,7 @@ extension JXRoomSourcePagerViewController: JXSegmentedListContainerViewDataSourc
                 emptyMessage: "当前没有可显示的直播间。",
                 emptySymbolName: "rectangle.stack.badge.questionmark",
                 favoriteModel: favoriteModel,
+                preferredLayoutWidth: lastLayoutWidth > 0 ? lastLayoutWidth : nil,
                 canLoadMore: nil,
                 onLoadMore: nil,
                 onSelectRoom: { _ in }
@@ -358,6 +390,7 @@ extension JXRoomSourcePagerViewController: JXSegmentedListContainerViewDataSourc
             emptyMessage: page.emptyMessage,
             emptySymbolName: page.emptySymbolName,
             favoriteModel: favoriteModel,
+            preferredLayoutWidth: lastLayoutWidth > 0 ? lastLayoutWidth : nil,
             canLoadMore: page.canLoadMore,
             onLoadMore: page.onLoadMore,
             onSelectRoom: { [weak self] room in

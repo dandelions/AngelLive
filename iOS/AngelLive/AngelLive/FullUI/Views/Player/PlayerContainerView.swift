@@ -84,6 +84,7 @@ struct PlayerContentView: View {
     @State private var showVideoSetting = false
     @State private var showDanmakuSettings = false
     @State private var showVLCUnsupportedHint = false
+    @State private var isControlPopupOpen = false
     @StateObject private var vlcPlaybackController = VLCPlaybackController()
     @State private var hasVLCStartedPlayback = false
     /// KSPlayer 路径首帧标志:state 第一次进入 .buffering / .bufferFinished 后置 true,
@@ -102,6 +103,9 @@ struct PlayerContentView: View {
     @State private var wasPlayingBeforeBackground: Bool?
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @Environment(\.isIPadFullscreen) private var isIPadFullscreen: Binding<Bool>
+    @Environment(\.roomSwitcherPresentation) private var roomSwitcherPresentation: Binding<Bool>
+    @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
 
     // 检测设备是否为横屏
     private var isDeviceLandscape: Bool {
@@ -116,6 +120,14 @@ struct PlayerContentView: View {
 
     private var useKSPlayer: Bool {
         viewModel.selectedPlayerKernel == .ksplayer && PlayerKernelSupport.isKSPlayerAvailable
+    }
+
+    private var isFullscreen: Bool {
+        AppConstants.Device.isIPad ? isIPadFullscreen.wrappedValue : isDeviceLandscape
+    }
+
+    private var isControlLocked: Bool {
+        useKSPlayer ? playerModel.isLocked : vlcIsLocked
     }
 
     var body: some View {
@@ -135,6 +147,10 @@ struct PlayerContentView: View {
             .background(AppConstants.Device.isIPad ? Color.black : (isDeviceLandscape ? Color.black : Color.clear))
             .preference(key: PlayerHeightPreferenceKey.self, value: playerHeight)
             .preference(key: VerticalLiveModePreferenceKey.self, value: isVerticalLiveMode)
+            .simultaneousGesture(roomSwitcherGesture(in: geometry.size))
+            .accessibilityAction(named: Text("快速换台")) {
+                presentRoomSwitcher()
+            }
         }
         .edgesIgnoringSafeArea(isVerticalLiveMode ? .all : [])
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
@@ -272,6 +288,41 @@ struct PlayerContentView: View {
         return shouldFillHeight ? size.height : calculatedByRatio
     }
 
+    private func roomSwitcherGesture(in size: CGSize) -> some Gesture {
+        DragGesture(minimumDistance: 20)
+            .onEnded { dragValue in
+                guard isFullscreen,
+                      !isVerticalLiveMode,
+                      !isControlLocked,
+                      !isControlPopupOpen,
+                      GeneralSettingModel().enablePlayerGesture,
+                      dragValue.startLocation.x >= size.width * 0.55 else {
+                    return
+                }
+
+                let translation = dragValue.translation
+                guard translation.width <= -70,
+                      abs(translation.width) > abs(translation.height) * 1.5 else {
+                    return
+                }
+
+                presentRoomSwitcher()
+            }
+    }
+
+    private func presentRoomSwitcher() {
+        guard !isControlLocked,
+              !isControlPopupOpen,
+              !roomSwitcherPresentation.wrappedValue else {
+            return
+        }
+
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        withAnimation(accessibilityReduceMotion ? nil : .snappy(duration: 0.32)) {
+            roomSwitcherPresentation.wrappedValue = true
+        }
+    }
+
     // MARK: - Player Content
 
     private var playerContent: some View {
@@ -299,14 +350,16 @@ struct PlayerContentView: View {
                         UnifiedPlayerControlOverlay(
                             bridge: controlBridge,
                             showVideoSetting: $showVideoSetting,
-                            showDanmakuSettings: $showDanmakuSettings
+                            showDanmakuSettings: $showDanmakuSettings,
+                            isPopupPresented: $isControlPopupOpen
                         )
                     }
                     #else
                     UnifiedPlayerControlOverlay(
                         bridge: controlBridge,
                         showVideoSetting: $showVideoSetting,
-                        showDanmakuSettings: $showDanmakuSettings
+                        showDanmakuSettings: $showDanmakuSettings,
+                        isPopupPresented: $isControlPopupOpen
                     )
                     #endif
 

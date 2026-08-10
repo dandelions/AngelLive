@@ -20,6 +20,7 @@ struct DetailPlayerView: View {
     @Environment(HistoryModel.self) private var historyModel
     @Environment(AppFavoriteModel.self) private var favoriteModel
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
 
     /// 全局播放器 coordinator，在整个 DetailPlayerView 生命周期中保持
     @StateObject private var playerCoordinator = KSVideoPlayer.Coordinator()
@@ -274,6 +275,14 @@ struct DetailPlayerView: View {
                         .ignoresSafeArea()
                     }
                 }
+
+                if isRoomSwitcherPresented {
+                    roomSwitcherOverlay(
+                        availableSize: geometry.size,
+                        safeInsets: safeInsets
+                    )
+                    .zIndex(200)
+                }
             }
             .onChange(of: geometry.size) { _, newSize in
                 let isLandscape = newSize.width > newSize.height
@@ -285,6 +294,7 @@ struct DetailPlayerView: View {
             }
         }
         .environment(\.isIPadFullscreen, $isIPadFullscreen)
+        .environment(\.roomSwitcherPresentation, $isRoomSwitcherPresented)
         .navigationBarBackButtonHidden(shouldHideSystemBackButton)
         .interactivePopGestureEnabled(shouldEnableInteractivePopGesture)
         .interactiveDismissDisabled(isIPhoneLandscape)
@@ -329,6 +339,9 @@ struct DetailPlayerView: View {
         }
         .onChange(of: playerCoordinator.state) { _, _ in
             playbackSession.attach(playerLayer: playerCoordinator.playerLayer)
+        }
+        .onChange(of: categoryRooms) { _, newValue in
+            switcherCategoryRooms = newValue
         }
         .task {
             await viewModel.loadPlayURL()
@@ -496,27 +509,6 @@ struct DetailPlayerView: View {
             .padding(.trailing, 16)
             .padding(.bottom, 16)
         }
-        .sheet(isPresented: $isRoomSwitcherPresented) {
-            RoomSwitcherPanel(
-                currentRoom: viewModel.currentRoom,
-                favorites: favoriteModel.roomList,
-                history: historyModel.watchList,
-                category: switcherCategoryRooms,
-                selectedSourceIndex: $selectedRoomSourceIndex,
-                switchingRoomID: switchingRoomID,
-                failedRoomID: failedRoomID,
-                failureMessage: roomSwitchFailureMessage,
-                canLoadMoreCategory: canLoadMoreCategoryRooms,
-                isLoadingMoreCategory: isLoadingMoreCategoryRooms,
-                onLoadMoreCategory: loadMoreSwitcherCategoryRooms,
-                onSelect: switchRoom
-            )
-            .presentationDetents([.medium, .large])
-            .presentationDragIndicator(.visible)
-        }
-        .onChange(of: categoryRooms) { _, newValue in
-            switcherCategoryRooms = newValue
-        }
     }
 
     private var chatListView: some View {
@@ -551,6 +543,77 @@ struct DetailPlayerView: View {
         }
     }
 
+    private func roomSwitcherOverlay(
+        availableSize: CGSize,
+        safeInsets: EdgeInsets
+    ) -> some View {
+        ZStack(alignment: .trailing) {
+            Color.black.opacity(0.46)
+                .contentShape(Rectangle())
+                .onTapGesture(perform: dismissRoomSwitcher)
+                .accessibilityHidden(true)
+                .transition(.opacity)
+
+            RoomSwitcherPanel(
+                currentRoom: viewModel.currentRoom,
+                favorites: favoriteModel.roomList,
+                history: historyModel.watchList,
+                category: switcherCategoryRooms,
+                selectedSourceIndex: $selectedRoomSourceIndex,
+                switchingRoomID: switchingRoomID,
+                failedRoomID: failedRoomID,
+                failureMessage: roomSwitchFailureMessage,
+                canLoadMoreCategory: canLoadMoreCategoryRooms,
+                isLoadingMoreCategory: isLoadingMoreCategoryRooms,
+                onLoadMoreCategory: loadMoreSwitcherCategoryRooms,
+                onSelect: switchRoom,
+                onClose: dismissRoomSwitcher
+            )
+            .padding(.top, safeInsets.top)
+            .padding(.trailing, safeInsets.trailing)
+            .padding(.bottom, safeInsets.bottom)
+            .frame(width: roomSwitcherPanelWidth(for: availableSize))
+            .frame(maxHeight: .infinity)
+            .background {
+                ZStack {
+                    Rectangle().fill(.ultraThinMaterial)
+                    LinearGradient(
+                        colors: [.black.opacity(0.28), .black.opacity(0.52)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                }
+            }
+            .clipShape(
+                UnevenRoundedRectangle(
+                    topLeadingRadius: 26,
+                    bottomLeadingRadius: 26
+                )
+            )
+            .overlay(alignment: .leading) {
+                Rectangle()
+                    .fill(.white.opacity(0.12))
+                    .frame(width: 1)
+                    .allowsHitTesting(false)
+            }
+            .shadow(color: .black.opacity(0.34), radius: 24, x: -10)
+            .environment(\.colorScheme, .dark)
+            .transition(.move(edge: .trailing).combined(with: .opacity))
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .ignoresSafeArea()
+    }
+
+    private func roomSwitcherPanelWidth(for size: CGSize) -> CGFloat {
+        if AppConstants.Device.isIPad {
+            return min(480, max(400, size.width * 0.46))
+        }
+        if size.width > size.height {
+            return min(420, max(320, size.width * 0.48))
+        }
+        return max(300, size.width - 16)
+    }
+
     // MARK: - Helper Methods
 
     private func clearChat() {
@@ -561,7 +624,15 @@ struct DetailPlayerView: View {
     }
 
     private func toggleRoomSwitcher() {
-        isRoomSwitcherPresented.toggle()
+        withAnimation(accessibilityReduceMotion ? nil : .snappy(duration: 0.32)) {
+            isRoomSwitcherPresented.toggle()
+        }
+    }
+
+    private func dismissRoomSwitcher() {
+        withAnimation(accessibilityReduceMotion ? nil : .snappy(duration: 0.28)) {
+            isRoomSwitcherPresented = false
+        }
     }
 
     private func switchRoom(_ room: LiveModel) {
@@ -624,6 +695,19 @@ extension EnvironmentValues {
     var isIPadFullscreen: Binding<Bool> {
         get { self[IPadFullscreenEnvironmentKey.self] }
         set { self[IPadFullscreenEnvironmentKey.self] = newValue }
+    }
+}
+
+// MARK: - Room Switcher Presentation
+
+private struct RoomSwitcherPresentationEnvironmentKey: EnvironmentKey {
+    static let defaultValue: Binding<Bool> = .constant(false)
+}
+
+extension EnvironmentValues {
+    var roomSwitcherPresentation: Binding<Bool> {
+        get { self[RoomSwitcherPresentationEnvironmentKey.self] }
+        set { self[RoomSwitcherPresentationEnvironmentKey.self] = newValue }
     }
 }
 

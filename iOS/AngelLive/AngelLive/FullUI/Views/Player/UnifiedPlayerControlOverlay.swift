@@ -19,6 +19,7 @@ struct UnifiedPlayerControlOverlay: View {
     let bridge: PlayerControlBridge
     @Binding var showVideoSetting: Bool
     @Binding var showDanmakuSettings: Bool
+    @Binding var isPopupPresented: Bool
 
     @State private var autoHideTask: Task<Void, Never>?
     @State private var isSettingsPopupOpen = false
@@ -270,14 +271,19 @@ struct UnifiedPlayerControlOverlay: View {
                 cancelAutoHideTimer()
             }
         }
+        .onChange(of: isPopupOpen) { _, isOpen in
+            isPopupPresented = isOpen
+        }
         .onAppear {
             isMaskVisible = bridge.isMaskShow.wrappedValue
+            isPopupPresented = isPopupOpen
             if isMaskVisible && !isPopupOpen {
                 startAutoHideTimer()
             }
         }
         .onDisappear {
             cancelAutoHideTimer()
+            isPopupPresented = false
         }
     }
 

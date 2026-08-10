@@ -62,6 +62,7 @@ class RoomListViewController: UIViewController {
     private var isLoadingMore = false
     private var isLoadingMoreStaticRooms = false
     private var lastKnownCollectionWidth: CGFloat = 0
+    private var preferredStaticLayoutWidth: CGFloat?
 
     // MARK: - Initialization
 
@@ -87,6 +88,7 @@ class RoomListViewController: UIViewController {
         emptyMessage: String,
         emptySymbolName: String,
         favoriteModel: AppFavoriteModel?,
+        preferredLayoutWidth: CGFloat? = nil,
         canLoadMore: (() -> Bool)? = nil,
         onLoadMore: (() async -> [LiveModel])? = nil,
         onSelectRoom: @escaping (LiveModel) -> Void
@@ -99,6 +101,7 @@ class RoomListViewController: UIViewController {
         self.favoriteModel = favoriteModel
         self.rooms = rooms
         self.usesStaticRooms = true
+        self.preferredStaticLayoutWidth = preferredLayoutWidth
         self.canLoadMoreStaticRooms = canLoadMore
         self.onLoadMoreStaticRooms = onLoadMore
         self.onSelectRoom = onSelectRoom
@@ -174,7 +177,8 @@ class RoomListViewController: UIViewController {
         let horizontalSpacing = flowLayout.minimumInteritemSpacing
         let insets = flowLayout.sectionInset
 
-        let availableWidth = max(0, width - insets.left - insets.right)
+        let layoutWidth = preferredStaticLayoutWidth ?? width
+        let availableWidth = max(0, layoutWidth - insets.left - insets.right)
 
         while columns > 1 {
             let totalSpacing = horizontalSpacing * (columns - 1)
@@ -299,6 +303,16 @@ class RoomListViewController: UIViewController {
         guard self.rooms != rooms else { return }
         self.rooms = rooms
         updateStaticViewState()
+    }
+
+    func updatePreferredStaticLayoutWidth(_ width: CGFloat) {
+        guard usesStaticRooms, width > 0 else { return }
+        guard preferredStaticLayoutWidth.map({ abs($0 - width) > 1 }) ?? true else { return }
+
+        preferredStaticLayoutWidth = width
+        collectionView.collectionViewLayout.invalidateLayout()
+        collectionView.reloadData()
+        collectionView.layoutIfNeeded()
     }
 
     private func updateStaticViewState() {
