@@ -62,7 +62,6 @@ class RoomListViewController: UIViewController {
     private var isLoadingMore = false
     private var isLoadingMoreStaticRooms = false
     private var lastKnownCollectionWidth: CGFloat = 0
-    private var preferredStaticLayoutWidth: CGFloat?
 
     // MARK: - Initialization
 
@@ -88,7 +87,6 @@ class RoomListViewController: UIViewController {
         emptyMessage: String,
         emptySymbolName: String,
         favoriteModel: AppFavoriteModel?,
-        preferredLayoutWidth: CGFloat? = nil,
         canLoadMore: (() -> Bool)? = nil,
         onLoadMore: (() async -> [LiveModel])? = nil,
         onSelectRoom: @escaping (LiveModel) -> Void
@@ -101,7 +99,6 @@ class RoomListViewController: UIViewController {
         self.favoriteModel = favoriteModel
         self.rooms = rooms
         self.usesStaticRooms = true
-        self.preferredStaticLayoutWidth = preferredLayoutWidth
         self.canLoadMoreStaticRooms = canLoadMore
         self.onLoadMoreStaticRooms = onLoadMore
         self.onSelectRoom = onSelectRoom
@@ -177,8 +174,7 @@ class RoomListViewController: UIViewController {
         let horizontalSpacing = flowLayout.minimumInteritemSpacing
         let insets = flowLayout.sectionInset
 
-        let layoutWidth = preferredStaticLayoutWidth ?? width
-        let availableWidth = max(0, layoutWidth - insets.left - insets.right)
+        let availableWidth = max(0, width - insets.left - insets.right)
 
         while columns > 1 {
             let totalSpacing = horizontalSpacing * (columns - 1)
@@ -305,13 +301,15 @@ class RoomListViewController: UIViewController {
         updateStaticViewState()
     }
 
-    func updatePreferredStaticLayoutWidth(_ width: CGFloat) {
-        guard usesStaticRooms, width > 0 else { return }
-        guard preferredStaticLayoutWidth.map({ abs($0 - width) > 1 }) ?? true else { return }
+    func refreshLayoutForCurrentBounds() {
+        view.setNeedsLayout()
+        view.layoutIfNeeded()
 
-        preferredStaticLayoutWidth = width
+        let currentWidth = collectionView.bounds.width
+        guard currentWidth > 0 else { return }
+        lastKnownCollectionWidth = currentWidth
         collectionView.collectionViewLayout.invalidateLayout()
-        collectionView.reloadData()
+        collectionView.setNeedsLayout()
         collectionView.layoutIfNeeded()
     }
 
@@ -585,14 +583,12 @@ extension RoomListViewController: JXSegmentedListContainerViewListDelegate {
     /// 关键修复:JX 在 scrollView 模式下让 listVC.view 进入 page 后,不会主动触发 cv 的 layout closeloop。
     /// 表现:cells 已经 dequeue 进 subviews 且 frame 正确,但 cv.visibleCells = 0,
     /// 导致 didSelectItemAt 永远不派发(场次少时点不动的真凶)。
-    /// 在 listDidAppear / listWillAppear 主动 layoutIfNeeded 把 visibleCells 注册起来即可。
+    /// 在 listDidAppear / listWillAppear 用当前 bounds 重算布局并注册 visibleCells。
     func listWillAppear() {
-        collectionView.setNeedsLayout()
-        collectionView.layoutIfNeeded()
+        refreshLayoutForCurrentBounds()
     }
 
     func listDidAppear() {
-        collectionView.setNeedsLayout()
-        collectionView.layoutIfNeeded()
+        refreshLayoutForCurrentBounds()
     }
 }

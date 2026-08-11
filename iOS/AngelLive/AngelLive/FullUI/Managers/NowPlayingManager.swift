@@ -92,9 +92,16 @@ enum NowPlayingManager {
                     completion(nil)
                     return
                 }
-                let artwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
+                let artwork = makeArtwork(from: image)
                 completion(artwork)
             }
         }.resume()
+    }
+
+    /// MediaPlayer invokes the request handler on its own access queue, so the
+    /// handler must not inherit this type's MainActor isolation.
+    nonisolated private static func makeArtwork(from image: UIImage) -> MPMediaItemArtwork {
+        let boundsSize = image.size
+        return MPMediaItemArtwork(boundsSize: boundsSize) { [image] _ in image }
     }
 }

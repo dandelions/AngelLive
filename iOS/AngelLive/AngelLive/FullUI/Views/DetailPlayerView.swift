@@ -590,12 +590,6 @@ struct DetailPlayerView: View {
                     bottomLeadingRadius: 26
                 )
             )
-            .overlay(alignment: .leading) {
-                Rectangle()
-                    .fill(.white.opacity(0.12))
-                    .frame(width: 1)
-                    .allowsHitTesting(false)
-            }
             .shadow(color: .black.opacity(0.34), radius: 24, x: -10)
             .environment(\.colorScheme, .dark)
             .transition(.move(edge: .trailing).combined(with: .opacity))

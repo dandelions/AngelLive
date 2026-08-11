@@ -67,6 +67,8 @@ class LiveRoomCollectionViewCell: UICollectionViewCell {
             hosting.view.isUserInteractionEnabled = interactive
         } else {
             let hosting = UIHostingController(rootView: rootView)
+            // Collection view 已处理安全区，避免右侧 cell 再次扣除 trailing inset。
+            hosting.safeAreaRegions = []
             hosting.view.backgroundColor = .clear
             hosting.view.translatesAutoresizingMaskIntoConstraints = false
             hosting.view.isUserInteractionEnabled = interactive
