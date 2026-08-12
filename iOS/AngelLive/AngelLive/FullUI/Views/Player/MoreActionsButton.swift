@@ -16,6 +16,9 @@ struct MoreActionsButton: View {
     var onClearChat: () -> Void
     var showQualityOption: Bool = false
     var onShowQualityPanel: (() -> Void)? = nil
+    var onRefreshPlayback: (() -> Void)? = nil
+    var supportsPictureInPicture: Bool = false
+    var onTogglePictureInPicture: (() -> Void)? = nil
     var embeddedInDock: Bool = false
 
     @Environment(RoomInfoViewModel.self) private var viewModel
@@ -31,6 +34,19 @@ struct MoreActionsButton: View {
             if showQualityOption {
                 Button("清晰度 - \(viewModel.currentPlayQualityString)") {
                     onShowQualityPanel?()
+                }
+            }
+
+            if let onRefreshPlayback {
+                Button("刷新直播") {
+                    onRefreshPlayback()
+                }
+                .disabled(viewModel.isLoading)
+            }
+
+            if supportsPictureInPicture, let onTogglePictureInPicture {
+                Button("画中画") {
+                    onTogglePictureInPicture()
                 }
             }
 

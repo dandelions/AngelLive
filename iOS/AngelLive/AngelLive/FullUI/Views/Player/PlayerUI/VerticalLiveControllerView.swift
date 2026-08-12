@@ -272,11 +272,41 @@ struct VerticalLiveControllerView: View {
                     showQualityOption: true,
                     onShowQualityPanel: {
                         showQualityPanel = true
-                    }
+                    },
+                    onRefreshPlayback: refreshPlayback,
+                    supportsPictureInPicture: supportsPictureInPicture,
+                    onTogglePictureInPicture: togglePictureInPicture
                 )
             }
             .padding(.trailing, 16)
         }
+    }
+
+    private var supportsPictureInPicture: Bool {
+        model.config.playerLayer is KSComplexPlayerLayer
+    }
+
+    private func refreshPlayback() {
+        guard activatePlaybackSurface() else { return }
+        viewModel.refreshPlayback()
+    }
+
+    private func togglePictureInPicture() {
+        guard activatePlaybackSurface(),
+              let playerLayer = model.config.playerLayer as? KSComplexPlayerLayer else {
+            return
+        }
+
+        if playerLayer.isPictureInPictureActive {
+            playerLayer.pipStop(restoreUserInterface: true)
+        } else {
+            playerLayer.pipStart()
+        }
+    }
+
+    private func activatePlaybackSurface() -> Bool {
+        guard let surfaceID = viewModel.playbackSurfaceID else { return false }
+        return PlaybackSessionRegistry.shared.activate(surfaceID)
     }
 }
 

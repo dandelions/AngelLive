@@ -128,14 +128,8 @@ public struct KSVideoPlayerView: View {
                     }
                 }
 
-                // 手势层（亮度、音量、双击全屏）
-                PlayerGestureView(onSingleTap: {
-                    if model.showVideoSetting {
-                        model.showVideoSetting = false
-                    } else {
-                        model.config.isMaskShow.toggle()
-                    }
-                }, isLocked: $model.isLocked)
+                // 手势层（亮度、音量；竖屏直播双击播放/暂停，其余场景双击全屏）
+                playerGestureLayer
 
                 if showsControlLayer {
                     controllerView
@@ -182,6 +176,27 @@ public struct KSVideoPlayerView: View {
         }
     }
 
+    private var playerGestureLayer: some View {
+        PlayerGestureView(
+            onSingleTap: handleSingleTap,
+            onDoubleTap: verticalLiveDoubleTapAction,
+            isLocked: $model.isLocked
+        )
+    }
+
+    private var verticalLiveDoubleTapAction: (() -> Void)? {
+        guard isVerticalLiveMode else { return nil }
+        return toggleVerticalLivePlayback
+    }
+
+    private func handleSingleTap() {
+        if model.showVideoSetting {
+            model.showVideoSetting = false
+        } else {
+            model.config.isMaskShow.toggle()
+        }
+    }
+
     @MainActor
     public func openURL(_ url: URL, options: KSOptions? = nil) {
         if url.isSubtitle {
@@ -209,6 +224,20 @@ public struct KSVideoPlayerView: View {
                 }
                 return true
             }
+    }
+
+    private func toggleVerticalLivePlayback() {
+        guard let surfaceID = viewModel.playbackSurfaceID,
+              PlaybackSessionRegistry.shared.activate(surfaceID),
+              let playerLayer = model.config.playerLayer else {
+            return
+        }
+
+        if viewModel.isPlaying || model.config.state.isPlaying {
+            playerLayer.pause()
+        } else {
+            playerLayer.play()
+        }
     }
 
     // 计算弹幕显示区域配置

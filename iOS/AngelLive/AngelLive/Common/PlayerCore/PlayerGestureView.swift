@@ -66,7 +66,7 @@ final class EdgeHitPassthroughView: UIView {
 //
 //  播放器手势处理视图
 //  - 单击显示/隐藏控制层
-//  - 双击全屏/退出全屏
+//  - 双击执行场景动作（默认全屏/退出全屏）
 //  - 左半边上下滑动调节亮度
 //  - 右半边上下滑动调节音量
 //
@@ -92,8 +92,20 @@ struct PlayerGestureView: View {
 
     /// 单击回调
     var onSingleTap: (() -> Void)?
+    /// 双击回调；未提供时沿用播放器默认的全屏/方向切换行为。
+    var onDoubleTap: (() -> Void)?
     /// 锁定状态绑定
     @Binding var isLocked: Bool
+
+    init(
+        onSingleTap: (() -> Void)? = nil,
+        onDoubleTap: (() -> Void)? = nil,
+        isLocked: Binding<Bool>
+    ) {
+        self.onSingleTap = onSingleTap
+        self.onDoubleTap = onDoubleTap
+        _isLocked = isLocked
+    }
 
     /// 当前调节类型
     @State private var adjustType: GestureAdjustType = .none
@@ -167,21 +179,16 @@ struct PlayerGestureView: View {
                         )
                         .simultaneousGesture(
                             TapGesture(count: 2)
-                                .onEnded {
-                                    // 锁定时禁用双击手势
-                                    guard !isLocked else { return }
-                                    handleDoubleTap()
-                                }
-                        )
-                        .simultaneousGesture(
-                            TapGesture(count: 1)
-                                .onEnded {
-                                    // 只有在没有拖动的情况下才响应单击
-                                    if !isDragging {
-                                        // 延迟执行单击，给双击判断留时间
-                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                                            onSingleTap?()
-                                        }
+                                .exclusively(before: TapGesture(count: 1))
+                                .onEnded { value in
+                                    switch value {
+                                    case .first:
+                                        // 双击优先，避免同时触发单击显隐。
+                                        guard !isLocked else { return }
+                                        handleDoubleTap()
+                                    case .second:
+                                        guard !isDragging else { return }
+                                        onSingleTap?()
                                     }
                                 }
                         )
@@ -262,6 +269,11 @@ struct PlayerGestureView: View {
 
     /// 处理双击手势
     private func handleDoubleTap() {
+        if let onDoubleTap {
+            onDoubleTap()
+            return
+        }
+
         if AppConstants.Device.isIPad {
             // iPad: 切换全屏模式
             withAnimation(.easeInOut(duration: 0.3)) {
