@@ -7,7 +7,7 @@ import Foundation
 public protocol WebSocketConnectionDelegate: AnyObject {
     func webSocketDidConnect()
     func webSocketDidDisconnect(error: Error?)
-    func webSocketDidReceiveMessage(text: String, nickname: String, color: UInt32)
+    func webSocketDidReceiveMessage(_ message: DanmakuDisplayMessage)
     /// 一次重连尝试开始时回调(attempt 为第几次,从 1 起;maxAttempts 为上限)。
     /// 提供默认空实现,既有实现方可不改;需要"正在重连"提示的平台再覆写。
     func webSocketIsReconnecting(attempt: Int, maxAttempts: Int)
@@ -544,11 +544,7 @@ private extension WebSocketConnection {
     func deliverMessages(_ messages: [LiveParseDanmakuMessage]?) {
         guard let messages else { return }
         for message in messages {
-            delegate?.webSocketDidReceiveMessage(
-                text: message.text,
-                nickname: message.nickname,
-                color: message.color ?? 0xFFFFFF
-            )
+            delegate?.webSocketDidReceiveMessage(DanmakuDisplayMessage(message))
         }
     }
 

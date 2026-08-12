@@ -654,16 +654,17 @@ final class RoomInfoViewModel {
 }
 
 extension RoomInfoViewModel: WebSocketConnectionDelegate {
-    func webSocketDidReceiveMessage(text: String, nickname: String, color: UInt32) {
+    func webSocketDidReceiveMessage(_ message: DanmakuDisplayMessage) {
         // §6.2 经去突发调度器摊开发射(调度器 @MainActor,故包一层 Task)
         Task { @MainActor in
             let settings = appViewModel.danmuSettingsViewModel
-            guard !settings.shouldBlockDanmu(text) else { return }
+            // 屏蔽词作用于 text:图片弹幕的 text 是降级文案,语义与纯文本弹幕一致
+            guard !settings.shouldBlockDanmu(message.text) else { return }
             let showColorDanmu = settings.showColorDanmu
             let alpha = settings.danmuAlpha
             let font = CGFloat(settings.danmuFontSize)
             danmuShootScheduler.enqueue { [danmuCoordinator] in
-                danmuCoordinator.shoot(text: text, showColorDanmu: showColorDanmu, color: color, alpha: alpha, font: font)
+                danmuCoordinator.shoot(message, showColorDanmu: showColorDanmu, alpha: alpha, font: font)
             }
         }
     }

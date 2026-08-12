@@ -672,24 +672,6 @@ final class RoomInfoViewModel {
 
 // MARK: - WebSocketConnectionDelegate
 extension RoomInfoViewModel: WebSocketConnectionDelegate {
-    func webSocketDidReceiveMessage(text: String, color: UInt32) { //旧版本
-        Task { @MainActor in
-            guard !danmuSettings.shouldBlockDanmu(text) else { return }
-            // 将弹幕消息添加到聊天列表（底部气泡）
-            addDanmuMessage(text: text, userName: "")
-
-            // 发射到屏幕弹幕（飞过效果）— §6.2 经去突发调度器摊开发射
-            if danmuSettings.showDanmu {
-                let showColorDanmu = danmuSettings.showColorDanmu
-                let alpha = danmuSettings.danmuAlpha
-                let font = CGFloat(danmuSettings.danmuFontSize)
-                danmuShootScheduler.enqueue { [danmuCoordinator] in
-                    danmuCoordinator.shoot(text: text, showColorDanmu: showColorDanmu, color: color, alpha: alpha, font: font)
-                }
-            }
-        }
-    }
-
     func webSocketDidConnect() {
         Task { @MainActor in
             danmuServerIsConnected = true
@@ -718,11 +700,12 @@ extension RoomInfoViewModel: WebSocketConnectionDelegate {
         }
     }
 
-    func webSocketDidReceiveMessage(text: String, nickname: String, color: UInt32) { // 新版本
+    func webSocketDidReceiveMessage(_ message: DanmakuDisplayMessage) {
         Task { @MainActor in
-            guard !danmuSettings.shouldBlockDanmu(text) else { return }
+            // 屏蔽词作用于 text:图片弹幕的 text 是降级文案,语义与纯文本弹幕一致
+            guard !danmuSettings.shouldBlockDanmu(message.text) else { return }
             // 将弹幕消息添加到聊天列表（底部气泡）
-            addDanmuMessage(text: text, userName: nickname)
+            addDanmuMessage(text: message.text, userName: message.nickname)
 
             // 发射到屏幕弹幕（飞过效果）— §6.2 经去突发调度器摊开发射
             if danmuSettings.showDanmu {
@@ -730,7 +713,7 @@ extension RoomInfoViewModel: WebSocketConnectionDelegate {
                 let alpha = danmuSettings.danmuAlpha
                 let font = CGFloat(danmuSettings.danmuFontSize)
                 danmuShootScheduler.enqueue { [danmuCoordinator] in
-                    danmuCoordinator.shoot(text: text, showColorDanmu: showColorDanmu, color: color, alpha: alpha, font: font)
+                    danmuCoordinator.shoot(message, showColorDanmu: showColorDanmu, alpha: alpha, font: font)
                 }
             }
         }
