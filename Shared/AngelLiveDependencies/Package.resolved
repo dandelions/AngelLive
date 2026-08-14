@@ -1,5 +1,5 @@
 {
-  "originHash" : "171d5ef9c9d56c8cc14687ccf442a658d06cb70dbb9e243b85f7cd21dcac7a9c",
+  "originHash" : "38da1e4e5b6b9c76e28a075bc459f5a01a160c1112a801e03c7211d4bf5a38a2",
   "pins" : [
     {
       "identity" : "acknowlist",
@@ -76,10 +76,10 @@
     {
       "identity" : "ffmpegkit",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/TracyPlayer/FFmpegKit",
+      "location" : "git@github.com:TracyPlayer/FFmpegKit.git",
       "state" : {
-        "branch" : "lgpl",
-        "revision" : "e1a68023157949916412904a1af811774975e4fa"
+        "revision" : "1ae1a6733f01a26b55e694fa4b849ada61629cf4",
+        "version" : "8.1.2"
       }
     },
     {
@@ -114,8 +114,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/TracyPlayer/KSPlayer",
       "state" : {
-        "revision" : "10bcc6d33c5c49d9a287deb1bb5cba20754e79ed",
-        "version" : "3.6.0"
+        "revision" : "7b043d7cc2319cb671ff1819bb98e2eb0333b41f",
+        "version" : "3.8.0"
       }
     },
     {

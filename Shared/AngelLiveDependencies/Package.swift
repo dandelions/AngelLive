@@ -11,19 +11,8 @@ private let useVLC = ProcessInfo.processInfo.environment["USE_VLC"] == "1"
 private func resolveKSPlayerDependency() -> (package: Package.Dependency, target: Target.Dependency)? {
     guard !useVLC else { return nil }
 
-    let packageDirectory = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
-    let localKSPlayer = packageDirectory
-        .appendingPathComponent("../../../KSPlayer")
-        .standardizedFileURL
-
-    if FileManager.default.fileExists(atPath: localKSPlayer.appendingPathComponent("Package.swift").path) {
-        // KSPlayer resolves its adjacent FFmpegKit fork itself. Declaring FFmpegKit
-        // here as well creates two dependency chains with the same package identity.
-        return (.package(path: localKSPlayer.path), "KSPlayer")
-    }
-
     return (
-        .package(url: "https://github.com/TracyPlayer/KSPlayer", branch: "lgpl"),
+        .package(url: "https://github.com/TracyPlayer/KSPlayer", exact: "3.8.0"),
         "KSPlayer"
     )
 }

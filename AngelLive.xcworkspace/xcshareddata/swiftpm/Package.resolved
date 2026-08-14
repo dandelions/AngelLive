@@ -73,6 +73,15 @@
       }
     },
     {
+      "identity" : "ffmpegkit",
+      "kind" : "remoteSourceControl",
+      "location" : "git@github.com:TracyPlayer/FFmpegKit.git",
+      "state" : {
+        "revision" : "1ae1a6733f01a26b55e694fa4b849ada61629cf4",
+        "version" : "8.1.2"
+      }
+    },
+    {
       "identity" : "gzipswift",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/1024jp/GzipSwift",
@@ -106,6 +115,15 @@
       "state" : {
         "revision" : "dccea7e92e77b0aa9ae5955c0d8f78c88ac0a950",
         "version" : "1.7.0"
+      }
+    },
+    {
+      "identity" : "ksplayer",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/TracyPlayer/KSPlayer",
+      "state" : {
+        "revision" : "7b043d7cc2319cb671ff1819bb98e2eb0333b41f",
+        "version" : "3.8.0"
       }
     },
     {
