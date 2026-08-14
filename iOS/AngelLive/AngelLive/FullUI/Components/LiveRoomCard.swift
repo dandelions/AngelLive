@@ -291,32 +291,51 @@ struct LiveRoomCard: View {
 
     /// 封面图容器：有 URL 时双层 KFImage（模糊背景 + 清晰前景，不变形），失败或无 URL 时用本地占位
     private var coverView: some View {
-        Group {
-            if let url = coverURL {
-                // 背景模糊层：模糊在缓存时预处理，避免滚动时 GPU 实时模糊（减少 offscreen passes）
-                KFImage(url)
-                    .setProcessor(
-                        DownsamplingImageProcessor(size: CGSize(width: 80, height: 45))
-                        |> BlurImageProcessor(blurRadius: 8)
-                    )
-                    .placeholder {
-                        Rectangle()
-                            .fill(AppConstants.Colors.placeholderGradient())
-                    }
-                    .resizable()
-                    .overlay(
-                        // 前景清晰层：保持原比例居中显示，不变形
-                        KFImage(url)
-                            .placeholder {
-                                placeholderCover()
-                            }
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                    )
-            } else {
-                placeholderCover()
+        GeometryReader { geometry in
+            let targetSize = coverDownsampleSize(for: geometry.size)
+
+            Group {
+                if let url = coverURL {
+                    // 背景模糊层：模糊在缓存时预处理，避免滚动时 GPU 实时模糊（减少 offscreen passes）
+                    KFImage(url)
+                        .setProcessor(
+                            DownsamplingImageProcessor(size: CGSize(width: 80, height: 45))
+                            |> BlurImageProcessor(blurRadius: 8)
+                        )
+                        .placeholder {
+                            Rectangle()
+                                .fill(AppConstants.Colors.placeholderGradient())
+                        }
+                        .resizable()
+                        .overlay(
+                            // 前景层按卡片实际显示尺寸解码，保留少量余量，避免完整解码原图占用内存。
+                            KFImage(url)
+                                .setProcessor(DownsamplingImageProcessor(size: targetSize))
+                                .placeholder {
+                                    placeholderCover()
+                                }
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                        )
+                } else {
+                    placeholderCover()
+                }
             }
         }
+    }
+
+    /// Kingfisher 的 DownsamplingImageProcessor 接收点数，内部会结合 scaleFactor 生成物理像素。
+    /// 额外保留 25% 尺寸余量，兼顾转场、缩放和高密度屏幕下的清晰度。
+    private func coverDownsampleSize(for size: CGSize) -> CGSize {
+        guard size.width > 1, size.height > 1 else {
+            return CGSize(width: 240, height: 135)
+        }
+
+        let headroom: CGFloat = 1.25
+        return CGSize(
+            width: size.width * headroom,
+            height: size.height * headroom
+        )
     }
 
     /// 头像：无效 URL 时展示占位
@@ -324,6 +343,7 @@ struct LiveRoomCard: View {
         Group {
             if let url = avatarURL {
                 KFImage(url)
+                    .setProcessor(DownsamplingImageProcessor(size: CGSize(width: 48, height: 48)))
                     .placeholder { avatarPlaceholder }
                     .resizable()
                     .aspectRatio(contentMode: .fill)
