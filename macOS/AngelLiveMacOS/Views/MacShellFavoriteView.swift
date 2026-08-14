@@ -196,6 +196,8 @@ private struct MacDirectURLPlayerView: View {
         let options = KSOptions()
         options.userAgent = "libmpv"
         options.registerRemoteControll = false
+        // Keep rotated streams out of KSPlayer's macOS root-view transform path.
+        options.isRotateByFilter = true
         options.playerTypes = url.absoluteString.lowercased().contains(".m3u8")
             ? [KSAVPlayer.self, KSMEPlayer.self]
             : [KSMEPlayer.self]

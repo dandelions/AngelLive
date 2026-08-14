@@ -99,6 +99,10 @@ final class RoomInfoViewModel {
         let option = PlayerOptions()
         option.userAgent = PlayerConstants.defaultUserAgent
         option.registerRemoteControll = false
+        // Rotate portrait streams during decoding. KSPlayer's macOS fallback rotates the
+        // NSViewRepresentable root layer during layout, which can leave the video scaled
+        // and offset after SwiftUI/AppKit relayouts.
+        option.isRotateByFilter = true
         self.playerOption = option
     }
 
