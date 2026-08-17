@@ -421,7 +421,9 @@ struct PluginManagementView: View {
                     }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    if pluginSourceManager.remotePlugins.contains(where: { $0.installState == .notInstalled }) {
+                    if pluginSourceManager.remotePlugins.contains(where: {
+                        pluginSourceManager.catalogActionState(for: $0) == .install
+                    }) {
                         Button {
                             Task {
                                 _ = await pluginSourceManager.installAll()
@@ -441,12 +443,16 @@ struct PluginManagementView: View {
                 }
             }
         }
+        .task {
+            // Sheet 自己建立观察和刷新边界；无需关闭后依赖父页面的 .task 才看到更新。
+            await pluginSourceManager.refreshAvailableUpdates()
+        }
     }
 
     @ViewBuilder
     private func remotePluginActionView(for displayItem: RemotePluginDisplayItem) -> some View {
-        switch displayItem.installState {
-        case .notInstalled:
+        switch pluginSourceManager.catalogActionState(for: displayItem) {
+        case .install:
             Button {
                 Task {
                     let success = await pluginSourceManager.installPlugin(displayItem)
@@ -464,7 +470,26 @@ struct PluginManagementView: View {
                     .background(AppConstants.Colors.link, in: Capsule())
             }
             .buttonStyle(.plain)
-        case .installing:
+        case .update:
+            Button {
+                Task {
+                    let success = await pluginSourceManager.updatePlugin(pluginId: displayItem.id)
+                    if success {
+                        await pluginAvailability.refresh()
+                    }
+                    await pluginSourceManager.refreshAvailableUpdates()
+                }
+            } label: {
+                Text("更新")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(AppConstants.Colors.link, in: Capsule())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("更新插件")
+        case .installing, .updating:
             ProgressView()
                 .scaleEffect(0.8)
         case .installed:

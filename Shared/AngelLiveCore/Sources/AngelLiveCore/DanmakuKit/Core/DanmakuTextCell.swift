@@ -32,58 +32,72 @@ public class DanmakuTextCell: DanmakuCell {
 
         let text = model.text
         guard !text.isEmpty else { return }
-
-#if canImport(AppKit) && !canImport(UIKit)
-        // macOS: 描边 + 填充
         let nsText = NSString(string: text)
         let drawPoint = CGPoint(x: 25, y: 5)
-
-        // 获取填充色的 alpha 值，用于描边
-        var alpha: CGFloat = 1.0
-        if let colorSpace = model.color.usingColorSpace(.sRGB) {
-            alpha = colorSpace.alphaComponent
-        }
-
-        // 描边（使用与填充相同的透明度，但颜色更淡）
-        context.saveGState()
-        context.setTextDrawingMode(.stroke)
-        context.setLineWidth(2)
-        context.setLineJoin(.round)
-        let strokeAttrs: [NSAttributedString.Key: Any] = [.font: model.font, .foregroundColor: NSColor.black.withAlphaComponent(alpha * 0.5)]
-        nsText.draw(at: drawPoint, withAttributes: strokeAttrs)
-        context.restoreGState()
-
-        // 填充
-        let fillAttrs: [NSAttributedString.Key: Any] = [.font: model.font, .foregroundColor: model.color]
-        nsText.draw(at: drawPoint, withAttributes: fillAttrs)
-#else
         var red: CGFloat = 0
         var green: CGFloat = 0
         var blue: CGFloat = 0
-        var alpha: CGFloat = 0
+        var alpha: CGFloat = 1
         if !model.color.danmakuGetRGBA(&red, &green, &blue, &alpha) {
             red = 1
             green = 1
             blue = 1
             alpha = 1
         }
-        let nsText = NSString(string: text)
-        context.setLineWidth(2)
-        context.setLineJoin(.round)
-        context.saveGState()
-        context.setTextDrawingMode(.stroke)
 
-        let attributesStroke: [NSAttributedString.Key: Any] = [.font: model.font, .foregroundColor: DanmakuColor(rgb: 0x000000, alpha: alpha)]
-        context.setStrokeColor(DanmakuColor.black.cgColor)
-        nsText.draw(at: CGPoint(x: 25, y: 5), withAttributes: attributesStroke)
-        context.restoreGState()
+        // DanmakuFlameMaster 默认使用 3px FILL_AND_STROKE 后再覆盖正文。
+        // NSAttributedString 的 strokeWidth 单位是字号百分比,因此先把 3 个物理像素
+        // 换算成点,再换算成百分比。负值表示同时填充和描边。
+        let strokePercentage = DanmakuTextOutlineStyle.strokePercentage(
+            fontSize: model.font.pointSize,
+            screenScale: danmakuScreenScale()
+        )
+        let outlineColor = DanmakuTextOutlineStyle.outlineColor(
+            red: red,
+            green: green,
+            blue: blue,
+            alpha: alpha
+        )
 
-        let attributesFill: [NSAttributedString.Key: Any] = [.font: model.font, .foregroundColor: model.color]
-        context.setTextDrawingMode(.fill)
-        context.setStrokeColor(DanmakuColor.white.cgColor)
-        nsText.draw(at: CGPoint(x: 25, y: 5), withAttributes: attributesFill)
-#endif
+        let outlineAttributes: [NSAttributedString.Key: Any] = [
+            .font: model.font,
+            .foregroundColor: outlineColor,
+            .strokeColor: outlineColor,
+            .strokeWidth: strokePercentage
+        ]
+        nsText.draw(at: drawPoint, withAttributes: outlineAttributes)
+
+        let fillAttributes: [NSAttributedString.Key: Any] = [
+            .font: model.font,
+            .foregroundColor: model.color
+        ]
+        nsText.draw(at: drawPoint, withAttributes: fillAttributes)
     }
 
     public override func didDisplay(_ finished: Bool) {}
+}
+
+enum DanmakuTextOutlineStyle {
+    /// Bilibili DanmakuFlameMaster 示例使用 3px 描边。
+    static let physicalStrokeWidth: CGFloat = 3
+
+    static func strokePercentage(fontSize: CGFloat, screenScale: CGFloat) -> CGFloat {
+        let safeFontSize = max(fontSize, 1)
+        let safeScale = max(screenScale, 1)
+        let strokeWidthInPoints = physicalStrokeWidth / safeScale
+        return -(strokeWidthInPoints / safeFontSize * 100)
+    }
+
+    static func outlineColor(
+        red: CGFloat,
+        green: CGFloat,
+        blue: CGFloat,
+        alpha: CGFloat
+    ) -> DanmakuColor {
+        // 官方解析器仅对纯黑文字切白边。这里把接近黑色也纳入,避免深色插件弹幕
+        // 与黑边糊成一团,其余文字仍使用官方默认的黑色描边。
+        let isNearlyBlack = max(red, green, blue) <= 0.12
+        return (isNearlyBlack ? DanmakuColor.white : DanmakuColor.black)
+            .withAlphaComponent(alpha)
+    }
 }

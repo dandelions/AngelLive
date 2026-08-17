@@ -193,6 +193,10 @@ struct SubscriptionContentSheet: View {
                 }
             }
         }
+        .task {
+            // 在 sheet 生命周期内刷新版本映射，已安装插件可直接出现“更新”。
+            await pluginSourceManager.refreshAvailableUpdates()
+        }
     }
 
     private func contentRow(_ item: RemotePluginDisplayItem) -> some View {
@@ -222,7 +226,7 @@ struct SubscriptionContentSheet: View {
 
     @ViewBuilder
     private func itemStateView(_ item: RemotePluginDisplayItem) -> some View {
-        switch item.installState {
+        switch pluginSourceManager.catalogActionState(for: item) {
         case .failed(let error):
             VStack(alignment: .trailing) {
                 Image(systemName: "exclamationmark.triangle.fill")
@@ -232,52 +236,23 @@ struct SubscriptionContentSheet: View {
                     .foregroundStyle(AppConstants.Colors.error)
                     .lineLimit(2)
             }
-
-        case .notInstalled:
-            if pluginSourceManager.updatingPluginIds.contains(item.id) {
-                ProgressView()
-                    .scaleEffect(0.8)
-            } else if pluginSourceManager.hasUpdate(for: item.id) {
-                Button {
-                    Task {
-                        let success = await pluginSourceManager.updatePlugin(pluginId: item.id)
-                        if success {
-                            await pluginAvailability.refresh()
-                            await pluginSourceManager.refreshAvailableUpdates()
-                        }
-                    }
-                } label: {
-                    Text("更新")
-                        .font(.caption)
-                        .padding(.horizontal, AppConstants.Spacing.sm)
-                        .padding(.vertical, AppConstants.Spacing.xs)
-                        .background(AppConstants.Colors.link)
-                        .foregroundStyle(.white)
-                        .clipShape(Capsule())
-                }
-                .accessibilityLabel("更新订阅")
-            } else if pluginSourceManager.installedVersion(for: item.id) != nil {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(AppConstants.Colors.success)
-            } else {
-                Button {
-                    Task {
-                        let success = await pluginSourceManager.installPlugin(item)
-                        if success {
-                            await pluginAvailability.refresh()
-                        }
-                    }
-                } label: {
-                    Text("安装")
-                        .font(.caption)
-                        .padding(.horizontal, AppConstants.Spacing.sm)
-                        .padding(.vertical, AppConstants.Spacing.xs)
-                        .background(AppConstants.Colors.link)
-                        .foregroundStyle(.white)
-                        .clipShape(Capsule())
+        case .install:
+            catalogActionButton(title: "安装") {
+                let success = await pluginSourceManager.installPlugin(item)
+                if success {
+                    await pluginAvailability.refresh()
+                    await pluginSourceManager.refreshAvailableUpdates()
                 }
             }
-
+        case .update:
+            catalogActionButton(title: "更新") {
+                let success = await pluginSourceManager.updatePlugin(pluginId: item.id)
+                if success {
+                    await pluginAvailability.refresh()
+                    await pluginSourceManager.refreshAvailableUpdates()
+                }
+            }
+            .accessibilityLabel("更新插件")
         case .installing:
             HStack(spacing: AppConstants.Spacing.xs) {
                 ProgressView()
@@ -286,40 +261,39 @@ struct SubscriptionContentSheet: View {
                     .font(.caption)
                     .foregroundStyle(AppConstants.Colors.secondaryText)
             }
-
-        case .installed:
-            if pluginSourceManager.updatingPluginIds.contains(item.id) {
+        case .updating:
+            HStack(spacing: AppConstants.Spacing.xs) {
                 ProgressView()
                     .scaleEffect(0.8)
-            } else if pluginSourceManager.hasUpdate(for: item.id) {
-                Button {
-                    Task {
-                        let success = await pluginSourceManager.updatePlugin(pluginId: item.id)
-                        if success {
-                            await pluginAvailability.refresh()
-                            await pluginSourceManager.refreshAvailableUpdates()
-                        }
-                    }
-                } label: {
-                    Text("更新")
-                        .font(.caption)
-                        .padding(.horizontal, AppConstants.Spacing.sm)
-                        .padding(.vertical, AppConstants.Spacing.xs)
-                        .background(AppConstants.Colors.link)
-                        .foregroundStyle(.white)
-                        .clipShape(Capsule())
-                }
-                .accessibilityLabel("更新插件")
-            } else {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(AppConstants.Colors.success)
+                Text("更新中")
+                    .font(.caption)
+                    .foregroundStyle(AppConstants.Colors.secondaryText)
             }
+        case .installed:
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundStyle(AppConstants.Colors.success)
+        }
+    }
+
+    private func catalogActionButton(title: String, action: @escaping () async -> Void) -> some View {
+        Button {
+            Task { await action() }
+        } label: {
+            Text(title)
+                .font(.caption)
+                .padding(.horizontal, AppConstants.Spacing.sm)
+                .padding(.vertical, AppConstants.Spacing.xs)
+                .background(AppConstants.Colors.link)
+                .foregroundStyle(.white)
+                .clipShape(Capsule())
         }
     }
 
     private var canInstallAll: Bool {
         !pluginSourceManager.isInstalling &&
-        pluginSourceManager.remotePlugins.contains { $0.installState == .notInstalled }
+        pluginSourceManager.remotePlugins.contains {
+            pluginSourceManager.catalogActionState(for: $0) == .install
+        }
     }
 
     private func installAllPlugins() {

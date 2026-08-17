@@ -621,7 +621,7 @@ struct TVPluginManagementView: View {
 
     @ViewBuilder
     private func pluginStatusView(for item: RemotePluginDisplayItem) -> some View {
-        switch item.installState {
+        switch pluginSourceManager.catalogActionState(for: item) {
         case .failed:
             Text("失败")
                 .font(.system(size: 28))
@@ -632,54 +632,32 @@ struct TVPluginManagementView: View {
                     .font(.system(size: 24))
                     .foregroundStyle(.secondary)
             }
-        case .notInstalled:
-            if pluginSourceManager.updatingPluginIds.contains(item.id) {
-                HStack(spacing: 8) {
-                    ProgressView()
-                    Text("更新中")
-                        .font(.system(size: 24))
-                        .foregroundStyle(.secondary)
-                }
-            } else if pluginSourceManager.hasUpdate(for: item.id) {
-                Text("更新")
-                    .font(.system(size: 28))
-            } else if pluginSourceManager.installedVersion(for: item.id) != nil {
-                Text("已安装")
-                    .font(.system(size: 28))
+        case .updating:
+            HStack(spacing: 8) {
+                ProgressView()
+                Text("更新中")
+                    .font(.system(size: 24))
                     .foregroundStyle(.secondary)
-            } else {
-                Text("安装")
-                    .font(.system(size: 28))
             }
+        case .install:
+            Text("安装")
+                .font(.system(size: 28))
+        case .update:
+            Text("更新")
+                .font(.system(size: 28))
         case .installed:
-            if pluginSourceManager.updatingPluginIds.contains(item.id) {
-                HStack(spacing: 8) {
-                    ProgressView()
-                    Text("更新中")
-                        .font(.system(size: 24))
-                        .foregroundStyle(.secondary)
-                }
-            } else if pluginSourceManager.hasUpdate(for: item.id) {
-                Text("更新")
-                    .font(.system(size: 28))
-            } else {
-                Text("已安装")
-                    .font(.system(size: 28))
-                    .foregroundStyle(.secondary)
-            }
+            Text("已安装")
+                .font(.system(size: 28))
+                .foregroundStyle(.secondary)
         }
     }
 
     private func canTriggerPrimaryAction(for item: RemotePluginDisplayItem) -> Bool {
-        switch item.installState {
-        case .failed, .installing:
+        switch pluginSourceManager.catalogActionState(for: item) {
+        case .install, .update:
+            return true
+        case .installing, .updating, .installed, .failed:
             return false
-        case .notInstalled:
-            return !pluginSourceManager.updatingPluginIds.contains(item.id) &&
-                (pluginSourceManager.hasUpdate(for: item.id) ||
-                pluginSourceManager.installedVersion(for: item.id) == nil)
-        case .installed:
-            return pluginSourceManager.hasUpdate(for: item.id) && !pluginSourceManager.updatingPluginIds.contains(item.id)
         }
     }
 

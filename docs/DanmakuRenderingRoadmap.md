@@ -20,7 +20,7 @@
 |---|------|------|
 | F1 | 弹幕运动用 `CABasicAnimation` 改 `position.x`,由 Render Server 在 **GPU 合成**,主线程每帧基本不参与运动 | `DanmakuKit/Core/DanmakuTrack.swift:236-252` |
 | F2 | 每条弹幕文字**只光栅化一次**,画进 `CGContext` 生成 `CGImage` 缓存到 `layer.contents`,分摊在 16 条后台队列 | `DanmakuKit/Core/DanmakuAsyncLayer.swift`(`drawDanmakuQueueCount = 16`) |
-| F3 | ~~轨道选择是「从上往下,第一个能放下就放」~~ **已改**:选轨走 `DanmakuView.FloatingTrackPolicy` 策略 —— `.scattered`(候选轨中挑最空、并列者随机,iOS/macOS 默认)与 `.topPriority`(顶部优先,tvOS) | `DanmakuKit/Core/DanmakuView.swift`(`findSuitableTrack`) |
+| F3 | 选轨走 `DanmakuView.FloatingTrackPolicy` 策略；默认 `.topPriority` 按 B 站 `AlignTopRetainer` 语义从顶部复用第一条安全轨道，`.scattered` 仅保留为旧版兼容选项 | `DanmakuKit/Core/DanmakuView.swift`(`findSuitableTrack`) |
 | F4 | 同一 runloop tick 内 shoot 的所有弹幕,起点 x **完全相同**(右边缘) | `DanmakuTrack.swift:103` |
 | F5 | 速度只由 `displayTime` 决定,无任何时间/速度抖动 | `DanmakuTrack.swift:240-243` |
 | F6 | 切字号已可用:`trackHeight = fontSize * 1.35` 触发 `recalculateTracks()` | `iOS/.../Player/DanmuView.swift:49`、`DanmakuView.swift:86-91` |
@@ -178,8 +178,8 @@
 - 三端表现一致。
 
 ### 6.2 错落感调度实施清单（已完成）
-- [x] 轨道选择去固定首轨；shared 引擎采用候选轨随机。
-- [x] **tvOS 大屏顶部优先已落地(2026-08-01, `023e462`)**：不再靠 tvOS 自带的 DanmakuKit 副本实现，改由共享引擎的 `FloatingTrackPolicy` 表达。tvOS 在 `DanmuView.makeUIView` 里设 `.topPriority`，iOS/macOS 保持默认 `.scattered`。两端观感都不牺牲，逻辑只有一份。
+- [x] **B 站风格顶部安全轨道已落地（2026-08-17）**：共享引擎默认从顶部逐轨碰撞检测，复用第一条安全轨道；上方轨道确实无法容纳时才向下扩展。
+- [x] tvOS 继续显式设置 `.topPriority`；iOS/macOS 使用相同默认行为，`.scattered` 仅作为旧版兼容策略保留。
 - [x] 去突发:喂弹幕处加缓冲队列,一批不同帧发,摊到 1–2 秒带随机抖动逐条发出。
 - [x] 速度微抖动:建模型时 `displayTime` 加 ±10~15% 随机。
 - [x] 参数(抖动窗口/速度方差)可调,便于真机调感。
@@ -226,7 +226,7 @@
 
 tvOS 原先在 `TV/AngelLiveTVOS/Third/DanmakuKit/` 维护一份与 `AngelLiveCore` 并存的 DanmakuKit(11 个文件),两份已实质分叉。`023e462` 删除副本,统一到共享引擎。
 
-核对结论:tvOS 独有符号只有 5 个,其中 3 个是方法内局部变量,**真正的差异只有大屏顶部优先选轨一处**(已按 §6.2 做成策略参数)。共享版本质是 tvOS 版的超集 —— 跨平台 shim、`@MainActor`、`MAX_FLOAT_X` 由 `infinity/2` 改为有限值、切字号时不再破坏在飞弹幕。
+核对结论:tvOS 独有符号只有 5 个,其中 3 个是方法内局部变量。共享版本质是 tvOS 版的超集 —— 跨平台 shim、`@MainActor`、`MAX_FLOAT_X` 由 `infinity/2` 改为有限值、切字号时不再破坏在飞弹幕；选轨现已三端统一为顶部首个安全轨道。
 
 一处此前的认知错误:曾以为「tvOS 没有 `DanmakuShootScheduler`(错落感去突发)」,因为副本目录里没有该文件。实际上 tvOS 的 `RoomInfoViewModel` 早就 `import AngelLiveCore` 在用它。**合并不会给 tvOS 引入去突发行为,它本来就有。**
 
@@ -254,7 +254,7 @@ tvOS 原先在 `TV/AngelLiveTVOS/Third/DanmakuKit/` 维护一份与 `AngelLiveCo
 
 ## 9. 待真机验收:引擎单一化后的 tvOS 观感
 
-1. 选轨:低密度时仍从顶部起排,不应散布全屏(那是 `.scattered`,tvOS 不该出现)。
+1. 选轨:三端低密度时都从顶部起排；第一轨通过碰撞检测后应立即复用，不应跳到底部空轨。
 2. 高密度时纵向铺满,不重叠、不追尾。
 3. 切字号:在飞弹幕保持原尺寸飞完,不跳行不消失。**共享版与旧副本此处行为不同** —— 旧副本会破坏在飞 cell,用户能看出差异。
 4. `MAX_FLOAT_X` 由 `infinity/2` 改为 `100000`:确认无异常位移或闪烁。

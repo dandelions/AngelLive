@@ -16,6 +16,44 @@ public enum PluginInstallState: Equatable, Sendable {
     case failed(String)
 }
 
+/// 远程插件在目录/订阅内容界面中应呈现的统一操作状态。
+/// 三端都通过这个状态决定显示“安装”还是“更新”，避免各自判断产生分歧。
+public enum RemotePluginCatalogActionState: Equatable, Sendable {
+    case install
+    case installing
+    case update
+    case updating
+    case installed
+    case failed(String)
+
+    public static func resolve(
+        installState: PluginInstallState,
+        isInstalled: Bool,
+        hasUpdate: Bool,
+        isUpdating: Bool
+    ) -> Self {
+        if isUpdating {
+            return .updating
+        }
+        // 远程索引刚刷新时 displayItem 可能仍是旧的 `.installed` / `.notInstalled`,
+        // 更新资格应以真实安装版本和最新远程版本为准。
+        if isInstalled, hasUpdate {
+            return .update
+        }
+
+        switch installState {
+        case .installing:
+            return .installing
+        case .failed(let message):
+            return .failed(message)
+        case .installed:
+            return .installed
+        case .notInstalled:
+            return isInstalled ? .installed : .install
+        }
+    }
+}
+
 /// 单个订阅源的健康状态
 public enum PluginSourceHealth: Equatable, Sendable {
     /// 刚添加,还没拉取过索引
@@ -519,7 +557,7 @@ public final class PluginSourceManager: @unchecked Sendable {
     /// 避免用户白等下载时间后才发现需要登录。
     @MainActor
     public func installAll() async -> Int {
-        let toInstall = remotePlugins.filter { $0.installState == .notInstalled }
+        let toInstall = remotePlugins.filter { catalogActionState(for: $0) == .install }
         installTotalCount = toInstall.count
         installCompletedCount = 0
         defer {
@@ -621,6 +659,15 @@ public final class PluginSourceManager: @unchecked Sendable {
 
     public func latestVersion(for pluginId: String) -> String? {
         latestRemoteItemsByPluginId[pluginId]?.version
+    }
+
+    public func catalogActionState(for displayItem: RemotePluginDisplayItem) -> RemotePluginCatalogActionState {
+        RemotePluginCatalogActionState.resolve(
+            installState: displayItem.installState,
+            isInstalled: installedVersion(for: displayItem.id) != nil,
+            hasUpdate: hasUpdate(for: displayItem.id),
+            isUpdating: updatingPluginIds.contains(displayItem.id)
+        )
     }
 
     @MainActor

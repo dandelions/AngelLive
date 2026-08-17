@@ -148,7 +148,9 @@ struct MacPluginManagementView: View {
                 HStack {
                     Text("可安装插件")
                     Spacer()
-                    if notInstalled.contains(where: { $0.installState == .notInstalled }) {
+                    if notInstalled.contains(where: {
+                        pluginSourceManager.catalogActionState(for: $0) == .install
+                    }) {
                         Button {
                             Task {
                                 _ = await pluginSourceManager.installAll()
@@ -372,8 +374,8 @@ struct MacPluginManagementView: View {
 
     @ViewBuilder
     private func remotePluginActionView(for displayItem: RemotePluginDisplayItem) -> some View {
-        switch displayItem.installState {
-        case .notInstalled:
+        switch pluginSourceManager.catalogActionState(for: displayItem) {
+        case .install:
             Button {
                 Task {
                     let success = await pluginSourceManager.installPlugin(displayItem)
@@ -387,7 +389,19 @@ struct MacPluginManagementView: View {
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.small)
-        case .installing:
+        case .update:
+            Button("更新") {
+                Task {
+                    let success = await pluginSourceManager.updatePlugin(pluginId: displayItem.id)
+                    if success {
+                        await pluginAvailability.refresh()
+                    }
+                    await pluginSourceManager.refreshAvailableUpdates()
+                }
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+        case .installing, .updating:
             ProgressView()
                 .controlSize(.small)
         case .installed:

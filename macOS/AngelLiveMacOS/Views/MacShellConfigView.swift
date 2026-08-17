@@ -211,7 +211,7 @@ private struct MacSubscriptionContentSheet: View {
 
     @ViewBuilder
     private func itemStateView(_ item: RemotePluginDisplayItem) -> some View {
-        switch item.installState {
+        switch pluginSourceManager.catalogActionState(for: item) {
         case .failed(let error):
             VStack(alignment: .trailing, spacing: 2) {
                 Image(systemName: "exclamationmark.triangle.fill")
@@ -222,31 +222,22 @@ private struct MacSubscriptionContentSheet: View {
                     .lineLimit(2)
             }
 
-        case .notInstalled:
-            if pluginSourceManager.updatingPluginIds.contains(item.id) {
-                ProgressView()
-                    .controlSize(.small)
-            } else if pluginSourceManager.hasUpdate(for: item.id) {
-                installActionButton(title: "更新") {
-                    let success = await pluginSourceManager.updatePlugin(pluginId: item.id)
-                    if success {
-                        await pluginAvailability.refresh()
-                        await pluginSourceManager.refreshAvailableUpdates()
-                    }
-                }
-            } else if pluginSourceManager.installedVersion(for: item.id) != nil {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(AppConstants.Colors.success)
-            } else {
-                installActionButton(title: "安装") {
-                    let success = await pluginSourceManager.installPlugin(item)
-                    if success {
-                        await pluginAvailability.refresh()
-                        await pluginSourceManager.refreshAvailableUpdates()
-                    }
+        case .install:
+            installActionButton(title: "安装") {
+                let success = await pluginSourceManager.installPlugin(item)
+                if success {
+                    await pluginAvailability.refresh()
+                    await pluginSourceManager.refreshAvailableUpdates()
                 }
             }
-
+        case .update:
+            installActionButton(title: "更新") {
+                let success = await pluginSourceManager.updatePlugin(pluginId: item.id)
+                if success {
+                    await pluginAvailability.refresh()
+                    await pluginSourceManager.refreshAvailableUpdates()
+                }
+            }
         case .installing:
             HStack(spacing: 4) {
                 ProgressView()
@@ -255,23 +246,17 @@ private struct MacSubscriptionContentSheet: View {
                     .font(.caption)
                     .foregroundStyle(AppConstants.Colors.secondaryText)
             }
-
-        case .installed:
-            if pluginSourceManager.updatingPluginIds.contains(item.id) {
+        case .updating:
+            HStack(spacing: 4) {
                 ProgressView()
                     .controlSize(.small)
-            } else if pluginSourceManager.hasUpdate(for: item.id) {
-                installActionButton(title: "更新") {
-                    let success = await pluginSourceManager.updatePlugin(pluginId: item.id)
-                    if success {
-                        await pluginAvailability.refresh()
-                        await pluginSourceManager.refreshAvailableUpdates()
-                    }
-                }
-            } else {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(AppConstants.Colors.success)
+                Text("更新中")
+                    .font(.caption)
+                    .foregroundStyle(AppConstants.Colors.secondaryText)
             }
+        case .installed:
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundStyle(AppConstants.Colors.success)
         }
     }
 
@@ -285,7 +270,9 @@ private struct MacSubscriptionContentSheet: View {
 
     private var canInstallAll: Bool {
         !pluginSourceManager.isInstalling &&
-        pluginSourceManager.remotePlugins.contains { $0.installState == .notInstalled }
+        pluginSourceManager.remotePlugins.contains {
+            pluginSourceManager.catalogActionState(for: $0) == .install
+        }
     }
 
     private func installAllPlugins() {

@@ -82,18 +82,18 @@ public class DanmakuView: DanmakuBaseView {
     /// If this property is false, the danmaku will not be reused and danmakuView(_:dequeueReusable danmaku:) methods will not be called.
     public var enableCellReusable = false
 
-    /// 滚动弹幕的选轨策略。手机/桌面与大屏对"好看"的定义不同,故做成策略而非二选一。
+    /// 滚动弹幕的选轨策略。
     public enum FloatingTrackPolicy: Sendable {
         /// 错落感优先:在所有可发轨道里挑弹幕最少的,并在并列者中随机。
-        /// 打散「一批同时到达 → 从上往下码成一道竖墙」。iOS / macOS 默认。
+        /// 这是旧版行为,会让低密度弹幕在上下轨道之间跳跃。
         case scattered
-        /// 顶部优先:低密度时集中在顶部,仅当上方轨道占满才向下扩展。
-        /// tvOS 大屏观看距离远,视线集中在上部,散开反而难读。
+        /// B 站风格:从顶部开始逐轨做碰撞检测,复用第一条安全轨道;
+        /// 只有上方轨道无法安全容纳新弹幕时才继续向下扩展。
         case topPriority
     }
 
-    /// 默认 `.scattered`,与 iOS / macOS 现有行为一致;tvOS 显式设为 `.topPriority`。
-    public var floatingTrackPolicy: FloatingTrackPolicy = .scattered
+    /// 默认使用顶部首个安全轨道,避免上一条弹幕快离场时新弹幕仍跳到底部空轨。
+    public var floatingTrackPolicy: FloatingTrackPolicy = .topPriority
     
     /// Each danmaku is in one track and the number of tracks in the view depends on the height of the track.
     public var trackHeight: CGFloat = 20 {
@@ -587,13 +587,14 @@ private extension DanmakuView {
         case .floating:
             switch floatingTrackPolicy {
             case .scattered:
-                // §6.2 错落感:收集所有可发轨道,在弹幕最少的轨道中随机挑一条,打散「从上往下顺序堆叠」
+                // 兼容旧版错落策略。
                 let candidates = floatingTracks.filter { $0.canShoot(danmaku: danmaku) }
                 guard !candidates.isEmpty else { return nil }
                 let minCount = candidates.map { $0.danmakuCount }.min()!
                 return candidates.filter { $0.danmakuCount == minCount }.randomElement()
             case .topPriority:
-                // 大屏:低密度弹幕从顶部开始,只有上方轨道忙时才向下扩展。
+                // 与 DanmakuFlameMaster AlignTopRetainer 一致:按 Y 从上往下扫描,
+                // 复用第一条通过未来碰撞检测的轨道。上一条是否仍在轨道里并不重要。
                 // 限制在 visibleFloatingTrackCount 内——recalculate 时非空轨道不会被立即移除,
                 // floatingTracks.count 可能临时大于当前实际可见轨道数。
                 let visibleTracks = floatingTracks.prefix(min(visibleFloatingTrackCount, floatingTracks.count))
