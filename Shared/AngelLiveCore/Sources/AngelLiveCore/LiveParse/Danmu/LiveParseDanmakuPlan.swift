@@ -217,12 +217,72 @@ struct LiveParseDanmakuMessage: Decodable, Sendable {
     let color: UInt32?
     /// 可选块，存在即代表这是一条图片弹幕。是否为图片弹幕完全由插件判定。
     let image: LiveParseDanmakuImage?
+    /// 有序图文片段。新插件优先输出此字段；缺失时继续使用旧的 text/image 字段。
+    let segments: [LiveParseDanmakuSegment]?
+
+    private enum CodingKeys: CodingKey {
+        case text
+        case nickname
+        case color
+        case image
+        case segments
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        text = try container.decode(String.self, forKey: .text)
+        nickname = try container.decode(String.self, forKey: .nickname)
+        color = try container.decodeIfPresent(UInt32.self, forKey: .color)
+        // 旧 image 块保持严格解码：字段类型错误时丢弃该消息，与既有行为一致。
+        image = try container.decodeIfPresent(LiveParseDanmakuImage.self, forKey: .image)
+        // segments 按片段容错：一个未来类型或畸形片段不应拖垮整条消息。
+        segments = try container
+            .decodeIfPresent([FailableDecodable<LiveParseDanmakuSegment>].self, forKey: .segments)?
+            .compactMap(\.value)
+    }
 }
 
 struct LiveParseDanmakuImage: Decodable, Sendable {
     let url: String
     let width: Double?
     let height: Double?
+    let alt: String?
+}
+
+enum LiveParseDanmakuSegment: Decodable, Sendable {
+    case text(String)
+    case image(LiveParseDanmakuImage)
+
+    private enum Kind: String, Decodable {
+        case text
+        case image
+    }
+
+    private enum CodingKeys: CodingKey {
+        case type
+        case text
+        case url
+        case width
+        case height
+        case alt
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        switch try container.decode(Kind.self, forKey: .type) {
+        case .text:
+            self = .text(try container.decode(String.self, forKey: .text))
+        case .image:
+            self = .image(
+                LiveParseDanmakuImage(
+                    url: try container.decode(String.self, forKey: .url),
+                    width: try container.decodeIfPresent(Double.self, forKey: .width),
+                    height: try container.decodeIfPresent(Double.self, forKey: .height),
+                    alt: try container.decodeIfPresent(String.self, forKey: .alt)
+                )
+            )
+        }
+    }
 }
 
 struct LiveParseDanmakuWriteAction: Decodable, Sendable {

@@ -827,10 +827,15 @@ final class RoomInfoViewModel {
 
     /// 添加弹幕消息到聊天列表
     @MainActor
-    func addDanmuMessage(text: String, userName: String = "观众") {
+    func addDanmuMessage(
+        text: String,
+        userName: String = "观众",
+        segments: [DanmakuDisplaySegment]? = nil
+    ) {
         let message = ChatMessage(
             userName: userName,
-            message: text
+            message: text,
+            segments: segments
         )
         appendDanmuMessage(message)
     }
@@ -882,7 +887,11 @@ extension RoomInfoViewModel: WebSocketConnectionDelegate {
             // 屏蔽词作用于 text:图片弹幕的 text 是降级文案,语义与纯文本弹幕一致
             guard !danmuSettings.shouldBlockDanmu(message.text) else { return }
             // 将弹幕消息添加到聊天列表（底部气泡）
-            addDanmuMessage(text: message.text, userName: message.nickname)
+            addDanmuMessage(
+                text: message.text,
+                userName: message.nickname,
+                segments: message.segments
+            )
 
             // 发射到屏幕弹幕（飞过效果）— §6.2 经去突发调度器摊开发射
             if danmuSettings.showDanmu {

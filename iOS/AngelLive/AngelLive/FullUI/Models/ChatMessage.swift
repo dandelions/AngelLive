@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import AngelLiveCore
 
 /// 聊天消息模型
 struct ChatMessage: Identifiable, Equatable {
@@ -13,6 +14,7 @@ struct ChatMessage: Identifiable, Equatable {
     let userName: String
     let userAvatar: String?
     let message: String
+    let segments: [DanmakuDisplaySegment]
     let timestamp: Date
     let isSystemMessage: Bool // 是否为系统消息
 
@@ -21,6 +23,7 @@ struct ChatMessage: Identifiable, Equatable {
         userName: String,
         userAvatar: String? = nil,
         message: String,
+        segments: [DanmakuDisplaySegment]? = nil,
         timestamp: Date = Date(),
         isSystemMessage: Bool = false
     ) {
@@ -28,6 +31,11 @@ struct ChatMessage: Identifiable, Equatable {
         self.userName = userName
         self.userAvatar = userAvatar
         self.message = message
+        if let segments, !segments.isEmpty {
+            self.segments = segments
+        } else {
+            self.segments = [.text(message)]
+        }
         self.timestamp = timestamp
         self.isSystemMessage = isSystemMessage
     }

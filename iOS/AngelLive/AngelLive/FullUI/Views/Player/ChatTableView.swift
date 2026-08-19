@@ -163,16 +163,38 @@ struct ChatTableView: UIViewRepresentable {
                     context: nil
                 )
                 let textWidth = availableWidth - userNameSize.width - spacing
-                let messageSize = (message.message as NSString).boundingRect(
-                    with: CGSize(width: textWidth, height: .greatestFiniteMagnitude),
-                    options: [.usesLineFragmentOrigin, .usesFontLeading],
-                    attributes: [.font: font],
-                    context: nil
+                let contentWidth = Self.estimatedContentWidth(
+                    for: message.segments,
+                    fallbackText: message.message,
+                    font: font
                 )
-                let isSingle = messageSize.height <= font.lineHeight + 2
+                let isSingle = textWidth > 0 && contentWidth <= textWidth
                 cachedCellTypes[message.id] = isSingle
                 return isSingle
             }
+        }
+
+        private static func estimatedContentWidth(
+            for segments: [DanmakuDisplaySegment],
+            fallbackText: String,
+            font: UIFont
+        ) -> CGFloat {
+            let width = segments.reduce(CGFloat.zero) { result, segment in
+                switch segment {
+                case .text(let text):
+                    return result + (text as NSString).size(withAttributes: [.font: font]).width
+                case .image(let image):
+                    let ratio: CGFloat
+                    if let size = image.pixelSize, size.width > 0, size.height > 0 {
+                        ratio = min(size.width / size.height, 4)
+                    } else {
+                        ratio = 1
+                    }
+                    return result + ceil(font.lineHeight * 1.15 * ratio)
+                }
+            }
+            if width > 0 { return width }
+            return (fallbackText as NSString).size(withAttributes: [.font: font]).width
         }
 
         // MARK: - UITableViewDataSource
@@ -257,6 +279,8 @@ class ChatBubbleBaseCell: UITableViewCell {
     let iconView = UIImageView()
     let userNameLabel = UILabel()
     let messageLabel = UILabel()
+    private var contentTask: Task<Void, Never>?
+    private var representedMessageID: UUID?
     
     override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
         super.init(style: style, reuseIdentifier: reuseIdentifier)
@@ -265,6 +289,19 @@ class ChatBubbleBaseCell: UITableViewCell {
     
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+
+    deinit {
+        contentTask?.cancel()
+    }
+
+    override func prepareForReuse() {
+        super.prepareForReuse()
+        contentTask?.cancel()
+        contentTask = nil
+        representedMessageID = nil
+        messageLabel.attributedText = nil
+        messageLabel.text = nil
     }
     
     func setupUI() {
@@ -322,6 +359,9 @@ class ChatBubbleBaseCell: UITableViewCell {
     }
     
     func configure(with message: ChatMessage) {
+        contentTask?.cancel()
+        contentTask = nil
+        representedMessageID = message.id
         stackView.arrangedSubviews.forEach { $0.removeFromSuperview() }
 
         if message.isSystemMessage {
@@ -338,9 +378,10 @@ class ChatBubbleBaseCell: UITableViewCell {
         } else {
             userNameLabel.text = message.userName
             userNameLabel.textColor = chatUserColor(for: message.userName)
-            messageLabel.text = message.message
             messageLabel.textColor = UIColor(white: 0.9, alpha: 1.0)
             messageLabel.font = UIFont.preferredFont(forTextStyle: .caption1)
+
+            configureContent(for: message)
 
             stackView.addArrangedSubview(userNameLabel)
             stackView.addArrangedSubview(messageLabel)
@@ -349,6 +390,94 @@ class ChatBubbleBaseCell: UITableViewCell {
             bubbleView.layer.borderColor = UIColor.white.withAlphaComponent(0.2).cgColor
             bubbleView.layer.borderWidth = 0.5
         }
+    }
+
+    private func configureContent(for message: ChatMessage) {
+        let font = UIFont.preferredFont(forTextStyle: .caption1)
+        let color = UIColor(white: 0.9, alpha: 1.0)
+        messageLabel.attributedText = Self.fallbackAttributedText(
+            segments: message.segments,
+            message: message.message,
+            font: font,
+            color: color
+        )
+
+        guard message.segments.contains(where: { segment in
+            if case .image = segment { return true }
+            return false
+        }) else { return }
+
+        let messageID = message.id
+        let segments = message.segments
+        let fallback = message.message
+        contentTask = Task { [weak self] in
+            let resolved = await DanmakuContentResolver.resolve(segments)
+            guard !Task.isCancelled, let self, self.representedMessageID == messageID else { return }
+            self.messageLabel.attributedText = Self.attributedText(
+                resolved: resolved,
+                fallback: fallback,
+                font: font,
+                color: color
+            )
+            self.setNeedsLayout()
+        }
+    }
+
+    private static func fallbackAttributedText(
+        segments: [DanmakuDisplaySegment],
+        message: String,
+        font: UIFont,
+        color: UIColor
+    ) -> NSAttributedString {
+        let fallback = segments.compactMap { segment -> String? in
+            switch segment {
+            case .text(let text): return text
+            case .image(let image): return image.altText
+            }
+        }.joined()
+        return NSAttributedString(
+            string: fallback.isEmpty ? message : fallback,
+            attributes: [.font: font, .foregroundColor: color]
+        )
+    }
+
+    private static func attributedText(
+        resolved: [DanmakuResolvedSegment],
+        fallback: String,
+        font: UIFont,
+        color: UIColor
+    ) -> NSAttributedString {
+        guard !resolved.isEmpty else {
+            return NSAttributedString(
+                string: fallback,
+                attributes: [.font: font, .foregroundColor: color]
+            )
+        }
+
+        let output = NSMutableAttributedString(string: "")
+        for segment in resolved {
+            switch segment {
+            case .text(let text):
+                output.append(NSAttributedString(
+                    string: text,
+                    attributes: [.font: font, .foregroundColor: color]
+                ))
+            case .image(let image, let pixelSize):
+                let attachment = NSTextAttachment()
+                attachment.image = UIImage(cgImage: image)
+                let sourceSize = pixelSize ?? CGSize(width: image.width, height: image.height)
+                let ratio = sourceSize.height > 0 ? min(sourceSize.width / sourceSize.height, 4) : 1
+                let height = ceil(font.lineHeight * 1.15)
+                attachment.bounds = CGRect(
+                    x: 0,
+                    y: floor((font.capHeight - height) / 2),
+                    width: ceil(height * ratio),
+                    height: height
+                )
+                output.append(NSAttributedString(attachment: attachment))
+            }
+        }
+        return output
     }
     
     private func chatUserColor(for userName: String) -> UIColor {

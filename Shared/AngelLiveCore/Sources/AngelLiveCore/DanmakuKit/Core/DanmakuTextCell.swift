@@ -29,49 +29,12 @@ public class DanmakuTextCell: DanmakuCell {
 
     nonisolated public override func displaying(_ context: CGContext, _ size: CGSize, _ isCancelled: Bool) {
         guard let model = model as? DanmakuTextCellModel else { return }
-
-        let text = model.text
-        guard !text.isEmpty else { return }
-        let nsText = NSString(string: text)
-        let drawPoint = CGPoint(x: 25, y: 5)
-        var red: CGFloat = 0
-        var green: CGFloat = 0
-        var blue: CGFloat = 0
-        var alpha: CGFloat = 1
-        if !model.color.danmakuGetRGBA(&red, &green, &blue, &alpha) {
-            red = 1
-            green = 1
-            blue = 1
-            alpha = 1
-        }
-
-        // DanmakuFlameMaster 默认使用 3px FILL_AND_STROKE 后再覆盖正文。
-        // NSAttributedString 的 strokeWidth 单位是字号百分比,因此先把 3 个物理像素
-        // 换算成点,再换算成百分比。负值表示同时填充和描边。
-        let strokePercentage = DanmakuTextOutlineStyle.strokePercentage(
-            fontSize: model.font.pointSize,
-            screenScale: danmakuScreenScale()
+        DanmakuTextDrawing.draw(
+            model.text,
+            font: model.font,
+            color: model.color,
+            at: CGPoint(x: 25, y: 5)
         )
-        let outlineColor = DanmakuTextOutlineStyle.outlineColor(
-            red: red,
-            green: green,
-            blue: blue,
-            alpha: alpha
-        )
-
-        let outlineAttributes: [NSAttributedString.Key: Any] = [
-            .font: model.font,
-            .foregroundColor: outlineColor,
-            .strokeColor: outlineColor,
-            .strokeWidth: strokePercentage
-        ]
-        nsText.draw(at: drawPoint, withAttributes: outlineAttributes)
-
-        let fillAttributes: [NSAttributedString.Key: Any] = [
-            .font: model.font,
-            .foregroundColor: model.color
-        ]
-        nsText.draw(at: drawPoint, withAttributes: fillAttributes)
     }
 
     public override func didDisplay(_ finished: Bool) {}

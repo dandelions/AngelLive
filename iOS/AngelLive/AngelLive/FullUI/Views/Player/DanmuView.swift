@@ -65,56 +65,17 @@ struct DanmuView: UIViewRepresentable {
             self.uiView = view
         }
 
-        /// 发射弹幕。带图片的消息先取图再发射,取图失败或超时降级为文本弹幕。
+        /// 发射弹幕。共享工厂负责图文片段取图、局部降级、布局模型和样式。
         @MainActor
         func shoot(_ message: DanmakuDisplayMessage, showColorDanmu: Bool = true, alpha: CGFloat = 1.0, font: CGFloat = 16) {
-            guard let image = message.image else {
-                shoot(text: message.text, showColorDanmu: showColorDanmu, color: message.color, alpha: alpha, font: font)
-                return
-            }
-
             Task { @MainActor [weak self] in
-                guard let cgImage = await DanmakuImageLoader.shared.image(for: image.url) else {
-                    self?.shoot(text: message.text, showColorDanmu: showColorDanmu, color: message.color, alpha: alpha, font: font)
-                    return
-                }
-                self?.shootImage(cgImage, pixelSize: image.pixelSize, font: font)
-            }
-        }
-
-        @MainActor
-        private func shootImage(_ image: CGImage, pixelSize: CGSize?, font: CGFloat) {
-            let model = DanmakuImageCellModel(
-                image: image,
-                pixelSize: pixelSize,
-                font: UIFont.systemFont(ofSize: font)
-            )
-            // §6.2 错落感:与文本弹幕一致的 displayTime 微抖动
-            model.displayTime = model.displayTime * Double.random(in: 0.85...1.15)
-            uiView?.shoot(danmaku: model)
-        }
-
-        /// 发射弹幕
-        func shoot(text: String, showColorDanmu: Bool = true, color: UInt32 = 0xFFFFFF, alpha: CGFloat = 1.0, font: CGFloat = 16) {
-            let model = DanmakuTextCellModel(str: text, strFont: UIFont.systemFont(ofSize: font))
-            // §6.2 错落感:displayTime ±15% 微抖动,同 tick 发出的弹幕速度自然拉开
-            model.displayTime = model.displayTime * Double.random(in: 0.85...1.15)
-
-            // 特殊消息处理（醒目留言等）
-            if text.contains("醒目留言") || text.contains("SC") {
-                model.backgroundColor = UIColor.orange
-                model.color = UIColor.white
-            } else {
-                // 普通弹幕：根据设置显示颜色或白色
-                if showColorDanmu && color != 0xFFFFFF {
-                    model.color = UIColor(rgb: Int(color), alpha: alpha)
-                } else {
-                    model.color = UIColor.white.withAlphaComponent(alpha)
-                }
-            }
-
-            DispatchQueue.main.async {
-                self.uiView?.shoot(danmaku: model)
+                let model = await DanmakuDisplayModelFactory.makeModel(
+                    for: message,
+                    showColorDanmu: showColorDanmu,
+                    alpha: alpha,
+                    fontSize: font
+                )
+                self?.uiView?.shoot(danmaku: model)
             }
         }
 

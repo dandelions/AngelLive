@@ -47,6 +47,65 @@ struct DanmakuMessageDecodingTests {
         #expect(display.color == DanmakuDisplayMessage.defaultColor)
     }
 
+    @Test("ordered segments decode as text-image-text content")
+    func decodesMixedSegments() throws {
+        let result = try decode("""
+        {"messages":[{"text":"hello [dog] world","nickname":"alice","color":65280,
+        "segments":[
+          {"type":"text","text":"hello "},
+          {"type":"image","url":"https://example.com/dog.png","width":80,"height":40,"alt":"[dog]"},
+          {"type":"text","text":" world"}
+        ]}]}
+        """)
+
+        let message = try #require(result.messages?.first)
+        let display = DanmakuDisplayMessage(message)
+        #expect(display.segments.count == 3)
+        #expect(display.image == nil)
+
+        guard case .text(let prefix) = display.segments[0],
+              case .image(let image) = display.segments[1],
+              case .text(let suffix) = display.segments[2] else {
+            Issue.record("segments did not preserve text-image-text order")
+            return
+        }
+        #expect(prefix == "hello ")
+        #expect(image.url.absoluteString == "https://example.com/dog.png")
+        #expect(image.pixelSize == CGSize(width: 80, height: 40))
+        #expect(image.altText == "[dog]")
+        #expect(suffix == " world")
+    }
+
+    @Test("one malformed or future segment is dropped without discarding valid siblings")
+    func malformedSegmentDoesNotDiscardMessage() throws {
+        let result = try decode("""
+        {"messages":[{"text":"fallback","nickname":"alice",
+        "segments":[
+          {"type":"text","text":"before"},
+          {"type":"sticker","url":"https://example.com/future.webp"},
+          {"type":"image","url":42},
+          {"type":"text","text":" after"}
+        ]}]}
+        """)
+
+        let display = DanmakuDisplayMessage(try #require(result.messages?.first))
+        // 两个相邻的有效文本片段在过滤坏片段后会合并，减少绘制 run 数量。
+        #expect(display.segments == [.text("before after")])
+    }
+
+    @Test("valid segments take precedence over the legacy whole-image block")
+    func segmentsTakePrecedenceOverLegacyImage() throws {
+        let result = try decode("""
+        {"messages":[{"text":"fallback","nickname":"alice",
+        "image":{"url":"https://example.com/legacy.png"},
+        "segments":[{"type":"text","text":"new format"}]}]}
+        """)
+
+        let display = DanmakuDisplayMessage(try #require(result.messages?.first))
+        #expect(display.segments == [.text("new format")])
+        #expect(display.image == nil)
+    }
+
     @Test("non http url degrades to a plain text message")
     func rejectsNonHTTPImageURL() throws {
         let result = try decode("""
