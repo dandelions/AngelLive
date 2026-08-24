@@ -21,8 +21,10 @@ enum LiveCheckMode {
 
 struct LiveRoomCard: View {
     let room: LiveModel
+    let width: CGFloat?
     let liveCheckMode: LiveCheckMode
     let showsCoverBadge: Bool
+    let subtitle: String?
     /// 可选的删除回调（用于历史记录）
     var onDelete: (() -> Void)? = nil
     /// 是否禁用 SwiftUI 自身的 tap gesture(由 cell 设置为 true)。
@@ -83,10 +85,20 @@ struct LiveRoomCard: View {
         return url
     }
 
-    init(room: LiveModel, width: CGFloat? = nil, liveCheckMode: LiveCheckMode = .local, showsCoverBadge: Bool = false) {
+    init(
+        room: LiveModel,
+        width: CGFloat? = nil,
+        liveCheckMode: LiveCheckMode = .local,
+        showsCoverBadge: Bool = false,
+        subtitle: String? = nil,
+        disableTapGesture: Bool = false
+    ) {
         self.room = room
+        self.width = width
         self.liveCheckMode = liveCheckMode
         self.showsCoverBadge = showsCoverBadge
+        self.subtitle = subtitle
+        self.disableTapGesture = disableTapGesture
     }
 
     // 判断是否已收藏
@@ -243,7 +255,7 @@ struct LiveRoomCard: View {
                         .foregroundStyle(AppConstants.Colors.primaryText)
                         .lineLimit(1)
 
-                    Text(room.userName.orDash)
+                    Text(displaySubtitle)
                         .font(.caption)
                         .foregroundStyle(AppConstants.Colors.secondaryText)
                         .lineLimit(1)
@@ -252,7 +264,17 @@ struct LiveRoomCard: View {
                 Spacer()
             }
         }
+        .frame(
+            width: width,
+            height: width.map { $0 / AppConstants.AspectRatio.card(width: $0) },
+            alignment: .topLeading
+        )
         .contentShape(Rectangle())
+    }
+
+    private var displaySubtitle: String {
+        guard let subtitle, !subtitle.isEmpty else { return room.userName.orDash }
+        return subtitle
     }
 
     // MARK: - 子视图

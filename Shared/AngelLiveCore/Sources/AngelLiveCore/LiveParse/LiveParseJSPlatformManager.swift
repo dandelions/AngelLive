@@ -640,55 +640,6 @@ public enum LiveParseJSPlatformManager {
     }
 }
 
-private struct PluginRoomDTO: Decodable {
-    let userName: String
-    let roomTitle: String
-    let roomCover: String
-    let userHeadImg: String
-    let liveState: String?
-    let userId: String
-    let roomId: String
-    let liveWatchedCount: String?
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-
-        userName = container.decodeLossyStringIfPresent(forKey: .userName) ?? ""
-        roomTitle = container.decodeLossyStringIfPresent(forKey: .roomTitle) ?? ""
-        roomCover = container.decodeLossyStringIfPresent(forKey: .roomCover) ?? ""
-        userHeadImg = container.decodeLossyStringIfPresent(forKey: .userHeadImg) ?? ""
-        liveState = container.decodeLossyStringIfPresent(forKey: .liveState)
-        userId = container.decodeLossyStringIfPresent(forKey: .userId) ?? ""
-        roomId = container.decodeLossyStringIfPresent(forKey: .roomId) ?? ""
-        liveWatchedCount = container.decodeLossyStringIfPresent(forKey: .liveWatchedCount)
-    }
-
-    enum CodingKeys: String, CodingKey {
-        case userName
-        case roomTitle
-        case roomCover
-        case userHeadImg
-        case liveState
-        case userId
-        case roomId
-        case liveWatchedCount
-    }
-
-    func toLiveModel(liveType: LiveType) -> LiveModel {
-        LiveModel(
-            userName: userName,
-            roomTitle: roomTitle,
-            roomCover: roomCover,
-            userHeadImg: userHeadImg,
-            liveType: liveType,
-            liveState: liveState,
-            userId: userId,
-            roomId: roomId,
-            liveWatchedCount: liveWatchedCount
-        )
-    }
-}
-
 private struct PluginLiveStatePayload: Decodable {
     let liveState: String?
     let stateNumber: Int?
@@ -754,33 +705,5 @@ private struct PluginLiveStatePayload: Decodable {
         } else {
             isLive = nil
         }
-    }
-}
-
-private extension KeyedDecodingContainer {
-    func decodeLossyStringIfPresent(forKey key: Key) -> String? {
-        if let value = try? decode(String.self, forKey: key) {
-            return value
-        }
-        if let value = try? decode(Int.self, forKey: key) {
-            return String(value)
-        }
-        if let value = try? decode(Double.self, forKey: key) {
-            return String(value)
-        }
-        if let value = try? decode(Bool.self, forKey: key) {
-            return value ? "true" : "false"
-        }
-        return nil
-    }
-
-    func decodeLossyIntIfPresent(forKey key: Key) -> Int? {
-        if let value = try? decode(Int.self, forKey: key) {
-            return value
-        }
-        if let value = try? decode(String.self, forKey: key), let intValue = Int(value) {
-            return intValue
-        }
-        return nil
     }
 }

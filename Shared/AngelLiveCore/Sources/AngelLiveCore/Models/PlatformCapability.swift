@@ -18,6 +18,7 @@ public enum PlatformFeature: String, CaseIterable, Sendable {
     case liveState     // 直播状态
     case shareResolve  // 分享码解析
     case danmaku       // 弹幕
+    case homeFeed      // 首页内容
 
     public var displayName: String {
         switch self {
@@ -29,6 +30,7 @@ public enum PlatformFeature: String, CaseIterable, Sendable {
         case .liveState:    return "直播状态"
         case .shareResolve: return "分享码解析"
         case .danmaku:      return "弹幕"
+        case .homeFeed:     return "首页内容"
         }
     }
 
@@ -42,6 +44,7 @@ public enum PlatformFeature: String, CaseIterable, Sendable {
         case .liveState:    return "dot.radiowaves.left.and.right"
         case .shareResolve: return "link"
         case .danmaku:      return "text.bubble"
+        case .homeFeed:     return "house"
         }
     }
 }
@@ -111,7 +114,8 @@ public enum PlatformCapability {
         (.roomDetail, ["getRoomDetail", "getLiveLastestInfo"]),
         (.liveState, ["getLiveState"]),
         (.shareResolve, ["resolveShare", "getRoomInfoFromShareCode"]),
-        (.danmaku, ["getDanmaku", "getDanmukuArgs"])
+        (.danmaku, ["getDanmaku", "getDanmukuArgs"]),
+        (.homeFeed, ["getHomeFeed"])
     ]
 
     public static func features(for liveType: LiveType) -> [(PlatformFeature, FeatureStatus)] {
@@ -215,8 +219,14 @@ public enum PlatformCapability {
     }
 
     private static func parseCapabilities(from manifestURL: URL) -> [PlatformFeature: FeatureStatus]? {
-        guard let data = try? Data(contentsOf: manifestURL),
-              let jsonObject = try? JSONSerialization.jsonObject(with: data),
+        guard let data = try? Data(contentsOf: manifestURL) else {
+            return nil
+        }
+        return parseCapabilities(from: data)
+    }
+
+    static func parseCapabilities(from data: Data) -> [PlatformFeature: FeatureStatus]? {
+        guard let jsonObject = try? JSONSerialization.jsonObject(with: data),
               let json = jsonObject as? [String: Any],
               let rawCapabilities = json["capabilities"] as? [String: Any] else {
             return nil
@@ -260,7 +270,7 @@ public enum PlatformCapability {
         }
     }
 
-    private static func containsFunction(named name: String, in script: String) -> Bool {
+    static func containsFunction(named name: String, in script: String) -> Bool {
         let escaped = NSRegularExpression.escapedPattern(for: name)
         let patterns = [
             "\\b\(escaped)\\s*\\(",

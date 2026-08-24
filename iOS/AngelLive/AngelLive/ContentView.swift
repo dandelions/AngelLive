@@ -11,7 +11,7 @@ import AngelLiveDependencies
 
 // 定义 Tab 选择类型
 enum TabSelection: Hashable {
-    case favorite
+    case home
     case allPlatforms
     case platform(Platformdescription)
     case settings
@@ -19,7 +19,7 @@ enum TabSelection: Hashable {
 }
 
 struct ContentView: View {
-    @State private var selectedTab: TabSelection = .favorite
+    @State private var selectedTab: TabSelection = .home
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.presentToast) private var presentToast
 
@@ -58,23 +58,6 @@ struct ContentView: View {
         return "配置"
     }
 
-    /// 收藏 tab 图标用的「有效同步状态」——没有任何内容时不转 loading。
-    /// - 完整 UI(有插件):看收藏房间列表;为空且正在同步 → 降为静态,不再旋转。
-    ///   (AppFavoriteModel.syncStatus 默认即为 .syncing,壳 UI 下它永不落地,会一直转。)
-    /// - 壳 UI(无插件):AppFavoriteModel 不参与,改看书签服务;无书签恒为静态。
-    /// 仅抑制「旋转(.syncing)」;错误 / 未登录状态照常透出,便于用户判断为何为空。
-    private var favoriteTabSyncStatus: CloudSyncStatus {
-        if pluginAvailability.hasAvailablePlugins {
-            if favoriteViewModel.roomList.isEmpty, favoriteViewModel.syncStatus == .syncing {
-                return .success
-            }
-            return favoriteViewModel.syncStatus
-        } else {
-            guard !bookmarkService.bookmarks.isEmpty else { return .success }
-            return bookmarkService.isLoading ? .syncing : .success
-        }
-    }
-
     var body: some View {
         @Bindable var manager = welcomeManager
 
@@ -84,14 +67,12 @@ struct ContentView: View {
                     iPadTabView
                 } else {
                     iPhoneTabView
-                        .background(FavoriteTabSymbolAnimator(syncStatus: favoriteTabSyncStatus))
                 }
             } else {
                 if AppConstants.Device.isIPad {
                     iOS17iPadTabView
                 } else {
                     iOS17iPhoneTabView
-                        .background(FavoriteTabSymbolAnimator(syncStatus: favoriteTabSyncStatus))
                 }
             }
         }
@@ -203,7 +184,7 @@ struct ContentView: View {
                 }
             }
             if newIds.isEmpty, selectedTab == .search {
-                selectedTab = .favorite
+                selectedTab = .home
             }
         }
         .onChange(of: platformViewModel.platformInfo) { _, newPlatforms in
@@ -213,7 +194,7 @@ struct ContentView: View {
             // "Tried to update with invalid selection value"。按稳定身份 pluginId 兜底。
             if case .platform(let selected) = selectedTab,
                !newPlatforms.contains(where: { $0.pluginId == selected.pluginId }) {
-                selectedTab = .favorite
+                selectedTab = .home
             }
         }
     }
@@ -290,14 +271,8 @@ struct ContentView: View {
     @available(iOS 18.0, *)
     private var iPadTabView: some View {
         TabView(selection: $selectedTab) {
-            Tab(value: TabSelection.favorite) {
-                AdaptiveFavoriteView()
-            } label: {
-                Label {
-                    Text("收藏")
-                } icon: {
-                    CloudSyncTabIcon(syncStatus: favoriteTabSyncStatus)
-                }
+            Tab("首页", systemImage: "house.fill", value: TabSelection.home) {
+                HomeView()
             }
 
             TabSection(platformSectionTitle) {
@@ -365,15 +340,8 @@ struct ContentView: View {
     private var iPhoneTabView: some View {
         if #available(iOS 26.0, *) {
             return TabView(selection: $selectedTab) {
-                Tab(value: TabSelection.favorite) {
-                    AdaptiveFavoriteView()
-                } label: {
-                    Label {
-                        Text("收藏")
-                    } icon: {
-                        // iPhone：常量占位，动画交给 FavoriteTabSymbolAnimator
-                        Image(systemName: "checkmark.icloud.fill")
-                    }
+                Tab("首页", systemImage: "house.fill", value: TabSelection.home) {
+                    HomeView()
                 }
 
                 Tab("配置", systemImage: "square.grid.2x2.fill", value: TabSelection.allPlatforms) {
@@ -394,15 +362,8 @@ struct ContentView: View {
             .tabBarMinimizeBehavior(.onScrollDown)
         } else {
            return TabView(selection: $selectedTab) {
-                Tab(value: TabSelection.favorite) {
-                    AdaptiveFavoriteView()
-                } label: {
-                    Label {
-                        Text("收藏")
-                    } icon: {
-                        // iPhone：常量占位，动画交给 FavoriteTabSymbolAnimator
-                        Image(systemName: "checkmark.icloud.fill")
-                    }
+                Tab("首页", systemImage: "house.fill", value: TabSelection.home) {
+                    HomeView()
                 }
 
                 Tab("配置", systemImage: "square.grid.2x2.fill", value: TabSelection.allPlatforms) {
@@ -430,15 +391,11 @@ struct ContentView: View {
     // iPad iOS 17 TabView
     private var iOS17iPadTabView: some View {
         TabView(selection: $selectedTab) {
-            AdaptiveFavoriteView()
+            HomeView()
                 .tabItem {
-                    Label {
-                        Text("收藏")
-                    } icon: {
-                        CloudSyncTabIcon(syncStatus: favoriteTabSyncStatus)
-                    }
+                    Label("首页", systemImage: "house.fill")
                 }
-                .tag(TabSelection.favorite)
+                .tag(TabSelection.home)
 
             AdaptivePlatformView()
                 .tabItem {
@@ -465,16 +422,11 @@ struct ContentView: View {
     // iPhone iOS 17 TabView
     private var iOS17iPhoneTabView: some View {
         TabView(selection: $selectedTab) {
-            AdaptiveFavoriteView()
+            HomeView()
                 .tabItem {
-                    Label {
-                        Text("收藏")
-                    } icon: {
-                        // iPhone：常量占位，动画交给 FavoriteTabSymbolAnimator
-                        Image(systemName: "checkmark.icloud.fill")
-                    }
+                    Label("首页", systemImage: "house.fill")
                 }
-                .tag(TabSelection.favorite)
+                .tag(TabSelection.home)
 
             AdaptivePlatformView()
                 .tabItem {

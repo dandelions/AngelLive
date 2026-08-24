@@ -12,6 +12,7 @@ import UIKit
 
 struct FavoriteView: View {
     @Environment(AppFavoriteModel.self) private var viewModel
+    let embeddedInNavigationStack: Bool
     @State private var searchText = ""
     /// 共享导航状态 - 在 PiP 背景/前台切换时保持稳定
     @State private var navigationState = LiveRoomNavigationState()
@@ -19,6 +20,10 @@ struct FavoriteView: View {
     @Namespace private var roomTransitionNamespace
     private static var lastLeaveTimestamp: Date?
     private static let syncCooldown: TimeInterval = 180
+
+    init(embeddedInNavigationStack: Bool = false) {
+        self.embeddedInNavigationStack = embeddedInNavigationStack
+    }
 
     var body: some View {
         playerPresentation
@@ -37,17 +42,31 @@ struct FavoriteView: View {
     @ViewBuilder
     private var playerPresentation: some View {
         if #available(iOS 18.0, *) {
-            baseNavigation
-                .fullScreenCover(isPresented: playerPresentedBinding) {
-                    playerDestination
-                }
+            if embeddedInNavigationStack {
+                favoriteList
+                    .fullScreenCover(isPresented: playerPresentedBinding) {
+                        playerDestination
+                    }
+            } else {
+                baseNavigation
+                    .fullScreenCover(isPresented: playerPresentedBinding) {
+                        playerDestination
+                    }
+            }
         } else {
-            // iOS 17: navigationDestination 必须在 NavigationStack 内部
-            NavigationStack {
+            if embeddedInNavigationStack {
                 favoriteList
                     .navigationDestination(isPresented: playerPresentedBinding) {
                         playerDestination
                     }
+            } else {
+                // iOS 17: navigationDestination 必须在 NavigationStack 内部
+                NavigationStack {
+                    favoriteList
+                        .navigationDestination(isPresented: playerPresentedBinding) {
+                            playerDestination
+                        }
+                }
             }
         }
     }
